@@ -86,4 +86,4 @@ Companion app is provided as portable application that doesn't need installation
 ### Windows
 - Select exe
 
-# Support 
+# Support Me
