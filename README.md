@@ -79,4 +79,11 @@ Someone ask me something, please.
 
 # Installation
 
+Companion app is provided as portable application that doesn't need installation.
+
+## Instructions on making app launch on startup (Section WIP)
+
+### Windows
+- Select exe
+
 # Support 
