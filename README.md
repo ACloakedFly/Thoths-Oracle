@@ -3,7 +3,7 @@ USB operated media display/controller for Windows, Linux, MacOS
 
 # Features
 
-- Software agnostic; companion app listens to operating system rather than a specific program like Spotify app or Firefox
+- Software agnostic companion app listens to operating system rather than a specific program like Spotify app or Firefox
   - If OS is aware of media, companion app will be as well
 - IPS display for maximum readability at 320x480
 - Display the available metadata of current media
@@ -44,11 +44,12 @@ Diagram
 - The software is written in C# for the Windows App.
 - Companion app catches changes to focused media broadcast from the operating system.
 - On media change, app requests metadata, packages it, then waits for signal from the Oracle that it is ready to receive the data.
-- Metadata is packaged as follows:
+- Metadata is packaged as follows with header tag denoting type, size, etc.:
   - System information containing date and time
   - Media duration and position
   - Media text: title, album, artist
   - Thumbnail
+- All text is converted to UTF-8.
 - Once ready signal is received, app sends a package over serial port, waits for ready signal, then proceeds to next package.
 - When input commands are received, app requests the OS completes the action.
 
@@ -57,8 +58,20 @@ Diagram
 - The firmware is written in C.
 - All serial communications are handled by Core 1. Core 0 handles all display features running LVGL.
 - Thoth's Oracle emits ready signal periodically while idling, and emits control commands as soon as inputted.
+- When data is received, the header tag is analyzed to know which buffer it should be put in.
+- If there is an error with the header tag, all subsequent data is dumped, and firmware waits for a pause in data transmission before resetting header information and buffers, and returning to idle state.
+- If no errors are detected, data is placed directley into the correct buffer for further analysis in the case of text data, or displayed immediately for images (rolling effect as image loads).
+- Media text starts as one big array of characters, and is split into the three fields using escape characters inserted by companion app.
+- The font used is DejaVu-Sans in 16 point, with as much of the character set as is hopefully reasonable to ensure maximum language compatibility, without containing the entire set.
+- Once the expected number of bytes is received based on the header tag, the header is reset, Oracle emits a ready signal, then enters idle state.
+- If firmware times out before receiving expected data, header tag is reset and device enters idle state.
 
 # Configuration
+
+ The following can be configured from companion app (WIP)
+- Which program to listen to, or any playing media
+- Port the device is connected to
+- Sensitivity of volume knob
 
 # FAQ
 
