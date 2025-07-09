@@ -9,13 +9,13 @@ char name[TEXT_SIZE];
 uint16_t name_counter = 0;
 uint32_t frame_length = 0;
 uint32_t img_counter = 0;
-uint32_t song_duration = 0;
+uint32_t song_duration = 1;
 uint32_t song_position = 0;
 uint32_t sys_time = 0;
 uint8_t sys_date = 0;
 uint8_t sys_month = 0;
 uint32_t sys_year = 0;
-uint8_t song_pos_bytes[4];
+uint8_t song_pos_bytes[8];
 bool name_dirty = false, position_dirty = false, time_dirty = false, img_dirty = false;
 char frame_header[HEADER_BYTES];
 char frame_garbage[HEADER_BYTES];
@@ -69,17 +69,20 @@ int frame_start(void){
         return 0;
     }
     frame_metadata(NULL);
+    char fd[71];
+    sprintf(fd, "Frame data: %d, %lu, %u, %u, %lu", frame_header[0], frame_length, frame_width, frame_height, frame_duration);
+    serial_jtag_write(6, fd, 71, portDelay);
     idle = false;
     return 1;
 }
 
-void frame_end(void){
+void frame_end(){
     idle = true;
     length = 0;
     name_counter = 0;
     frame_length = 0;
     img_counter = 0;
-    serial_jtag_write(7, "finished", 9, portDelay);
+    serial_jtag_write(7, "Finished", 9, portDelay);
 }
 
 void catch_and_release(void){
@@ -92,9 +95,9 @@ void catch_and_release(void){
 }
 
 void error_reset(uint8_t erre){
-    char mess[41];
-    sprintf(mess, "Serial error, clearing cover buffer: %d", erre);
-    serial_jtag_write(8, mess, 41, portDelay);
+    char mess[63];
+    sprintf(mess, "Serial error, clearing cover buffer, error code: %d, tag: %d", erre, frame_header[0]);
+    serial_jtag_write(8, mess, 63, portDelay);
     memset(album_cover, 0, IMG_SIZE);
     catch_and_release();
     length = 0;
@@ -126,7 +129,7 @@ uint8_t error_check(void){
         error_reset(6);
         return 6;
     }
-    else if (frame_header[0] == 4 && frame_length != 4){
+    else if (frame_header[0] == 4 && frame_length != 8){
         error_reset(7);
         return 7;
     }
@@ -153,7 +156,7 @@ void process_image(void){
 void process_text(void){
     if(xSemaphoreTake(info_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
         read_status = usb_serial_jtag_read_bytes(&name[name_counter], frame_length, portDelay);
-        song_duration = frame_duration;
+        //song_duration = frame_duration;
         name_counter += read_status;
         name_dirty = true;
         xSemaphoreGive(info_mutex);
@@ -178,22 +181,24 @@ void process_sys_msg(void){
 }
 
 void process_dur_pos(void){
-    char playing[45];
+    char playing[72];
     if(xSemaphoreTake(info_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
         position_dirty = true;
-        song_position = usb_serial_jtag_read_bytes(&song_pos_bytes, 4, portDelay);
+        song_position = usb_serial_jtag_read_bytes(&song_pos_bytes, 8, portDelay);
         song_position = song_pos_bytes[0] + (song_pos_bytes[1] << 8) + (song_pos_bytes[2] << 16) + (song_pos_bytes[3] << 24);
         song_position++;
+        song_duration = song_pos_bytes[4] + (song_pos_bytes[5] << 8) + (song_pos_bytes[6] << 16) + (song_pos_bytes[7] << 24);
         song_playing = frame_width;
         xSemaphoreGive(info_mutex);
     }
-    sprintf(playing, "Serial received play status: %u pos: %lu", frame_width, song_position);
-    serial_jtag_write(6, playing, 45, portDelay);
+    sprintf(playing, "Serial received play status: %u pos: %lu duration: %lu", frame_width, song_position, song_duration);
+    serial_jtag_write(6, playing, 72, portDelay);
     frame_end();
 }
 
 void serial_jtag_write(uint8_t msg_type, char *msg, uint16_t length, TickType_t ticks){
     char jtag_msg[512];
+    memset(jtag_msg, 0, 512);
     sprintf(jtag_msg, "%c%s%c", msg_type, msg, '\n');
     usb_serial_jtag_write_bytes(jtag_msg, length+2, ticks);
 }
@@ -203,6 +208,7 @@ void serial_task(void *pvParameters){
     name_counter = 0;
     memset(name, 0, 512);
     done_writing = false;
+    frame_end();
     uint16_t idle_counter = 0;
     for(;;){
         if(idle){

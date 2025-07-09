@@ -2,3 +2,7 @@ build/
 managed_components/
 .vscode/
 sdkconfig.old
+bin/
+logs/
+obj/
+thumb*

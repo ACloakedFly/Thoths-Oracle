@@ -1,0 +1,4 @@
+5
+Default Device
+COM3
+MusicBee.exe

@@ -187,13 +187,6 @@ static void decode_unicode(uint16_t bytes){
 
     if(xSemaphoreTake(info_mutex, 5) == pdTRUE){     
         if(name_dirty == false){
-            //printf("LVGL says: resetting labels\n");
-            /*lv_label_set_text(ld_title, NULL);
-            lv_label_set_text(ld_album, NULL);
-            lv_label_set_text(ld_artist, NULL);
-            lv_label_set_text(ld_dur, NULL);
-            printf("Text dirty\n");*/
-            //printf("'%s'\n", lv_label_get_text(ld_title));
             xSemaphoreGive(info_mutex);
             return;
         }
@@ -203,13 +196,16 @@ static void decode_unicode(uint16_t bytes){
         //printf("ESP Unicode mutex taken\n");
         for(int i = 0; i < bytes; i += BITS){
             wide_data[i/BITS] = (uint8_t)name[i];
-            //for (int j = 1; j < BITS; j++){
-            //    wide_data[i/BITS] = (CHAR_SIZE)name[i+j] << (8*j) | (CHAR_SIZE)wide_data[i/BITS];
-            //}
-            //printf("%02x ", wide_data[i/BITS]);
         }  
-        sprintf(song_dur, "%.2u:%.2u:%.2u", (uint8_t)(song_duration/3600), (uint8_t)((song_duration/60)%60), (uint8_t)(song_duration%60));
-        lv_bar_set_range(ld_bar, 0, song_duration);
+        memset(song_dur, 0, 11);
+        if(song_duration != 0){
+            sprintf(song_dur, "%.2u:%.2u:%.2u", (uint8_t)(song_duration/3600), (uint8_t)((song_duration/60)%60), (uint8_t)(song_duration%60));
+            lv_bar_set_range(ld_bar, 0, song_duration);
+        }
+        else{
+            memcpy(song_dur, "00:00:00", 9);
+            lv_bar_set_range(ld_bar, 0, 1);
+        }
         xSemaphoreGive(info_mutex);
         //printf("ESP Unicode mutex released\n");
     }
