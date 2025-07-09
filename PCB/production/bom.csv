@@ -1,0 +1,10 @@
+﻿Designator,Footprint,Quantity,Value,LCSC Part #
+J1,PinSocket_1x09_P2.54mm_Vertical,1,IO,
+J2,PinSocket_1x09_P2.54mm_Vertical,1,MCUDisplay,
+J3,PinSocket_1x08_P2.54mm_Vertical,1,Display,
+RV1,Potentiometer_Alps_RK09K_Single_Vertical,1,R_Potentiometer,
+SW1,SW_Slide-03_Wuerth-WS-SLTV_10x2.5x6.4_P2.54mm,1,Orientation,
+SW2,Kailh_socket_MX_PG1350,1,Prev,
+SW3,Kailh_socket_MX_PG1350,1,Play/Pause,
+SW4,Kailh_socket_MX_PG1350,1,Next,
+SW5,RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm,1,RotaryEncoder_Switch,
