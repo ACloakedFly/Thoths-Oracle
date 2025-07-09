@@ -320,6 +320,7 @@ static void UpdateInfo(void*v){
         }
         //lv_label_set_text(ld_time, time_string);
         vTaskDelay(pdMS_TO_TICKS(LV_DISP_DEF_REFR_PERIOD));
+       // xTaskDelayUntil
         //lv_obj_invalidate(ld_artist);
         //lv_refr_now(NULL);
         counter%=20;
