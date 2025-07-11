@@ -1,3 +1,25 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
+// lvgl_ui.c
+
 #include "data.h"
 
 const lv_img_dsc_t img_cover_rgb = {
@@ -32,17 +54,12 @@ static uint8_t system_month = 0;
 static uint16_t system_year = 0;
 //System time in seconds
 static uint32_t system_time = 0;
-static uint16_t lalbum_pos = 24;
 lv_timer_t *song_time, *ref_time;
 static bool song_play = false, text_dirty = false;
 
 lv_point_t points[] = {{12,26}, {308,26}};
 
-
-static void UpdateInfo(void*v);
 static void update_timer(lv_timer_t * timer);
-static void ref_timer(lv_timer_t * timer);
-TaskHandle_t update_info;
 
 static lv_style_t style, style_bar;
 
@@ -59,11 +76,6 @@ void lvgl_ui(lv_disp_t *disp)
     lv_style_set_bg_color(&style_bar, lv_color_hex(0xbb00cc));
     
     lv_obj_add_style(scr, &style, 0);
-    //Multi screen?
-    //lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_TRANSP, LV_PART_MAIN);
-    //lv_obj_t * scr = lv_scr(NULL, copy);
-    lv_disp_set_bg_opa(disp, LV_OPA_TRANSP);
-    //Multiscreen ends
 
     ESP_LOGI(TAG, "LVGL base");
     //Title icon
@@ -86,9 +98,8 @@ void lvgl_ui(lv_disp_t *disp)
 
     //Album data text
     ld_album = lv_label_create(scr);
-    //lv_label_set_long_mode(ld_album, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_label_set_long_mode(ld_album, LV_LABEL_LONG_CLIP);
-    //lv_obj_set_style_anim_speed(ld_album, 20, LV_PART_MAIN);
+    lv_label_set_long_mode(ld_album, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_style_anim_speed(ld_album, 20, LV_PART_MAIN);
     lv_obj_set_width(ld_album, 286);
     lv_label_set_text(ld_album, "No Data");
     lv_obj_align(ld_album, LV_ALIGN_TOP_LEFT, 24, 70);
@@ -162,19 +173,6 @@ void lvgl_ui(lv_disp_t *disp)
     lv_timer_set_repeat_count(song_time, -1);
     lv_timer_ready(song_time);
 
-    ref_time = lv_timer_create(ref_timer, 40, NULL);
-    lv_timer_set_repeat_count(ref_time, -1);
-    lv_timer_ready(ref_time);
-
-    ESP_LOGI(TAG, "LVGL config");
-
-    //info_mutex = xSemaphoreCreateBinary();
-    //xSemaphoreGive(info_mutex);
-    img_mutex = xSemaphoreCreateBinary();
-    xSemaphoreGive(img_mutex);
-    date_time_mutex = xSemaphoreCreateBinary();
-    xSemaphoreGive(date_time_mutex);
-    xTaskCreatePinnedToCore(UpdateInfo,"Update Info", 1536 + 1000 + 500,NULL,10,&update_info,0);//should be lower than ui_task
     ESP_LOGI(TAG, "LVGL Done, onto update");
 }
 
@@ -185,7 +183,7 @@ static void decode_unicode(uint16_t bytes){
     memset(song_album, 0, CHARS);
     memset(song_artist, 0, CHARS);
 
-    if(xSemaphoreTake(info_mutex, 5) == pdTRUE){     
+    if(xSemaphoreTake(info_mutex, 0) == pdTRUE){     
         if(name_dirty == false){
             xSemaphoreGive(info_mutex);
             return;
@@ -193,7 +191,6 @@ static void decode_unicode(uint16_t bytes){
         else
             name_dirty = false;
         text_dirty = true;
-        //printf("ESP Unicode mutex taken\n");
         for(int i = 0; i < bytes; i += BITS){
             wide_data[i/BITS] = (uint8_t)name[i];
         }  
@@ -207,7 +204,6 @@ static void decode_unicode(uint16_t bytes){
             lv_bar_set_range(ld_bar, 0, 1);
         }
         xSemaphoreGive(info_mutex);
-        //printf("ESP Unicode mutex released\n");
     }
     //printf("\nESP unicode decoded says: '%ls'\n", wide_data);
     uint8_t song_index = 0, album_i = 0, title_i = 0;//, artist_i = 0;
@@ -242,16 +238,6 @@ static void decode_unicode(uint16_t bytes){
         printf("Text dirty\n");
         text_dirty = false;
     }
-    //printf("\nESP delimitted says:\nTitle: %s\nAlbum: %s\nArtist: %s", song_title, song_album, song_artist);
-}
-
-static void ref_timer(lv_timer_t *timer){
-    //lv_obj_invalidate(ll_line);
-    lalbum_pos++;
-    lalbum_pos %= 262;
-    //lv_label_set_text(ld_album, (char*)song_album);
-    //lv_obj_align(ld_album, LV_ALIGN_TOP_LEFT, lalbum_pos, 70);
-
 }
 
 static void update_timer(lv_timer_t * timer){
@@ -274,20 +260,15 @@ static void update_timer(lv_timer_t * timer){
 
 static void decode_timer(void*v){
     
-    if(xSemaphoreTake(info_mutex, 5) == pdTRUE){  
+    if(xSemaphoreTake(info_mutex, 0) == pdTRUE){  
+        song_play = song_playing;
         if(position_dirty){
-            //xSemaphoreGive(info_mutex);
             song_secs = song_position;
-            song_play = song_playing;
             position_dirty = false;
-            //return;
-        }   
-        else
-            position_dirty = false;
-        
+        }        
         xSemaphoreGive(info_mutex);
     }
-    if(xSemaphoreTake(date_time_mutex, 5) == pdTRUE){
+    if(xSemaphoreTake(date_time_mutex, 0) == pdTRUE){
         if(time_dirty){
             time_dirty = false;
             system_date = sys_date;
@@ -299,26 +280,18 @@ static void decode_timer(void*v){
     }
 }
 
-static void UpdateInfo(void*v){
-    int counter = 0;
+void UpdateInfo(void*v){
     while(1){
-        if(counter == 0){
-            decode_unicode(512);
-            decode_timer(NULL);
-        }
+        lv_timer_handler();
+        decode_unicode(512);
+        decode_timer(NULL);
         if(xSemaphoreTake(img_mutex, 0) == pdTRUE){
             if(img_dirty){
                 img_dirty = false;
                 lv_img_set_src(img_cover, &img_cover_rgb);
             }
-            //lv_disp_set_bg_image(NULL, &img_cover_rgb);
             xSemaphoreGive(img_mutex);
         }
-        //lv_label_set_text(ld_time, time_string);
-        vTaskDelay(pdMS_TO_TICKS(LV_DISP_DEF_REFR_PERIOD));
-       // xTaskDelayUntil
-        //lv_obj_invalidate(ld_artist);
-        //lv_refr_now(NULL);
-        counter%=20;
+        vTaskDelay(pdMS_TO_TICKS(LVGL_HANDLER_PERIOD_MS));
     }
 }

@@ -1,3 +1,25 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
+// serial_rw.c
+
 #include "data.h"
 
 uint8_t album_cover[IMG_SIZE + RX_BUF_SIZE];//was 256
@@ -5,7 +27,6 @@ uint8_t album_cover[IMG_SIZE + RX_BUF_SIZE];//was 256
 bool idle = true;
 
 char name[TEXT_SIZE];
-//char name_buffer[512];
 uint16_t name_counter = 0;
 uint32_t frame_length = 0;
 uint32_t img_counter = 0;
@@ -31,7 +52,7 @@ uint16_t frame_height = 0;
 uint32_t frame_duration = 0;
 uint16_t read_status = 0;
 
-void serial_setup(){
+int serial_setup(){
     usb_serial_jtag_driver_config_t serial_config = {
         .rx_buffer_size = RX_BUF_SIZE,
         .tx_buffer_size = TX_BUF_SIZE,
@@ -40,16 +61,16 @@ void serial_setup(){
     err = usb_serial_jtag_driver_install(&serial_config);
     if(err != ESP_OK){
         printf("No serial for you :(\n)");
-        return;
+        return 0;
     }
-    printf("Serial!\n)");
+    return 1;
 }
 
 void frame_metadata(void *pvParameters){
-    frame_length = frame_header[1] + (frame_header[2] << 8) + (frame_header[3] << 16);
-    frame_width = frame_header[4] + (frame_header[5] << 8);
-    frame_height = frame_header[6] + (frame_header[7] << 8);
-    frame_duration = frame_header[8] + (frame_header[9] << 8) + (frame_header[10] << 16) + (frame_header[11] << 24); 
+    frame_length = (uint32_t)(frame_header[1] + (frame_header[2] << 8) + (frame_header[3] << 16));
+    frame_width = (uint16_t)(frame_header[4] + (frame_header[5] << 8));
+    frame_height = (uint16_t)(frame_header[6] + (frame_header[7] << 8));
+    frame_duration = (uint32_t)(frame_header[8] + (frame_header[9] << 8) + (frame_header[10] << 16) + (frame_header[11] << 24)); 
     read_status = 0;
 }
 
@@ -76,13 +97,16 @@ int frame_start(void){
     return 1;
 }
 
-void frame_end(){
+void frame_end(char *mes){
     idle = true;
     length = 0;
     name_counter = 0;
     frame_length = 0;
     img_counter = 0;
-    serial_jtag_write(7, "Finished", 9, portDelay);
+    memset(frame_header, 0, HEADER_BYTES);
+    char tg[31];
+    sprintf(tg, "Finished from: %s", mes);
+    serial_jtag_write(7, tg, 31, portDelay);
 }
 
 void catch_and_release(void){
@@ -105,7 +129,7 @@ void error_reset(uint8_t erre){
     frame_length = 0;
     read_status = 0;
     img_counter = 0;
-    frame_end();
+    frame_end("Error reset");
 }
 
 uint8_t error_check(void){
@@ -142,32 +166,34 @@ void process_image(void){
         img_dirty = true;
         xSemaphoreGive(img_mutex);
         if(read_status == 0){
-            frame_end();
+            frame_end("no image");
         }
         else{
             img_counter += read_status;
         }
         if(img_counter >= frame_length){
-            frame_end();
+            frame_end("image");
         }
+    }
+    else{
+        serial_jtag_write(6, "Image packet missed, mutex blocked", 35, portDelay);
     }
 }
 
 void process_text(void){
     if(xSemaphoreTake(info_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
         read_status = usb_serial_jtag_read_bytes(&name[name_counter], frame_length, portDelay);
-        //song_duration = frame_duration;
         name_counter += read_status;
         name_dirty = true;
         xSemaphoreGive(info_mutex);
     }
     if(name_counter >= frame_length){
-        frame_end();
+        frame_end("text");
     }
 }
 
 void process_sys_msg(void){
-    frame_end();
+    char messy[34];
     if((frame_header[4] + (frame_header[5] << 8)) != 0){
         if(xSemaphoreTake(date_time_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
             time_dirty = true;
@@ -175,25 +201,31 @@ void process_sys_msg(void){
             sys_month = frame_header[5];
             sys_year = frame_header[6] + (frame_header[7] << 8);
             sys_time = frame_header[8] + (frame_header[9] << 8) + (frame_header[10] << 16);
+            sprintf(messy, "Received date: %d/%d/%lu", sys_date, sys_month, sys_year);
+            serial_jtag_write(6, messy, 34, portDelay);
             xSemaphoreGive(date_time_mutex);
         }
     }
+    frame_end("sys_msg");
 }
 
 void process_dur_pos(void){
     char playing[72];
     if(xSemaphoreTake(info_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
-        position_dirty = true;
-        song_position = usb_serial_jtag_read_bytes(&song_pos_bytes, 8, portDelay);
+        memset(song_pos_bytes, 0, 8);
+        usb_serial_jtag_read_bytes(&song_pos_bytes, 8, portDelay);
+        song_duration = song_pos_bytes[4] + (song_pos_bytes[5] << 8) + (song_pos_bytes[6] << 16) + (song_pos_bytes[7] << 24);
+        if(!(song_duration == 0 && frame_height == 0)){
+            position_dirty = true;
+        }
         song_position = song_pos_bytes[0] + (song_pos_bytes[1] << 8) + (song_pos_bytes[2] << 16) + (song_pos_bytes[3] << 24);
         song_position++;
-        song_duration = song_pos_bytes[4] + (song_pos_bytes[5] << 8) + (song_pos_bytes[6] << 16) + (song_pos_bytes[7] << 24);
         song_playing = frame_width;
+        sprintf(playing, "Serial received play status: %u pos: %lu duration: %lu", frame_width, song_position, song_duration);
+        serial_jtag_write(6, playing, 72, portDelay);
         xSemaphoreGive(info_mutex);
     }
-    sprintf(playing, "Serial received play status: %u pos: %lu duration: %lu", frame_width, song_position, song_duration);
-    serial_jtag_write(6, playing, 72, portDelay);
-    frame_end();
+    frame_end("dur_pos");
 }
 
 void serial_jtag_write(uint8_t msg_type, char *msg, uint16_t length, TickType_t ticks){
@@ -204,12 +236,16 @@ void serial_jtag_write(uint8_t msg_type, char *msg, uint16_t length, TickType_t 
 }
 
 void serial_task(void *pvParameters){
-    memset(frame_header, 0, HEADER_BYTES);
+    serial_setup();
     name_counter = 0;
     memset(name, 0, 512);
+    memset(frame_header, 0, HEADER_BYTES);
     done_writing = false;
-    frame_end();
+    frame_end("start");
     uint16_t idle_counter = 0;
+    char resetted[28];
+    sprintf(resetted, "Last restart caused by: %d", (uint8_t)esp_reset_reason());
+    serial_jtag_write(6, resetted, 28, portDelay);
     for(;;){
         if(idle){
             if(frame_start() != 1){//something went wrong or no data in buffer

@@ -12,11 +12,12 @@ class DeviceHandler{
     public static CoreAudioDevice? playback_device;
     static bool writing_serial = false;
     static bool read_thumb = true;
-    static bool oracle_ready = false;
-    static bool debug_log = true;
+    static bool oracle_ready = true;
+    static bool debug_log = true, debug_console = true;
     static Int32 hash;
     static string Curr = "", album_buffer = "", artist_buffer = "", title_buffer = "", previous_info = "";
     static UInt32 song_duration = 0, song_position = 0;
+    static UInt16 reset_pos = 0;
     static string LastString = "";
     static string source = "", info = "info.txt";
     static string logs = "log_", log_dir = "logs\\";
@@ -56,7 +57,7 @@ class DeviceHandler{
     {
         Directory.CreateDirectory(log_dir);
         logs = string.Concat(log_dir, logs, DateTime.Now.Day + "_" + DateTime.Now.Month + "_" + DateTime.Now.Year + "_t_" + DateTime.Now.Hour + "_" + DateTime.Now.Minute + ".txt");
-        File.AppendAllText(logs, "Log Start:\n");
+        File.AppendAllText(logs, "\nLog Start:\n");
     }
 
     private static void WriteLog(string log_text, string? path = null)
@@ -71,9 +72,11 @@ class DeviceHandler{
             }
             catch (System.IO.IOException)
             {
-                
+
             }
         }
+        if (debug_console)
+            Console.WriteLine(log_text);
     }
 
     private static void GeneralSetup()
@@ -87,6 +90,7 @@ class DeviceHandler{
         {
             string[] default_data = { "5", "Default Device", "COM3", "" };
             data = default_data;
+            File.AppendAllText("info.txt", "5\nDefault Device\nCOM3\n");
         }
         if (data.Length >= 4)
         {
@@ -104,24 +108,33 @@ class DeviceHandler{
                 read_thumb = true;
             }
             catch(Exception ex){
-                Console.WriteLine(ex);
                 WriteLog(ex.ToString());
             }
     }
-    private static void Gsmtcsm_Current_Session_Changed(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs? args){
+    private static void Gsmtcsm_Current_Session_Changed(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs? args)
+    {
         var session = sender.GetCurrentSession();
-        if (session != null){
-            Console.WriteLine("Source App changed to: " + session.SourceAppUserModelId);
+        if (session != null)
+        {
             WriteLog("Source App changed to: " + session.SourceAppUserModelId);
-            if(source == "" || session.SourceAppUserModelId.Equals(source)){
+            if (source == "" || session.SourceAppUserModelId.Equals(source))
+            {
                 session.MediaPropertiesChanged += S_MediaPropertiesChanged;
                 S_MediaPropertiesChanged(session, null);
                 session.PlaybackInfoChanged += PlaybackInfoChanged;
                 PlaybackInfoChanged(session, null);
                 //session.TimelinePropertiesChanged += TimeLineInfoChanged;
                 //TimeLineInfoChanged(session, null);
-                gsmtcs = sender.GetCurrentSession();
+                gsmtcs = session;
             }
+            else
+            {
+                WriteLog("Session does not match");
+            }
+        }
+        else
+        {
+            WriteLog("No Current seesion");
         }
     }
     private static void TimeLineInfoChanged(GlobalSystemMediaTransportControlsSession sender, TimelinePropertiesChangedEventArgs? args)
@@ -146,21 +159,20 @@ class DeviceHandler{
         GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = sender.GetPlaybackInfo();
         UInt16 attempts = 0;
         TimeLineInfoChanged(sender, null);
+        byte byt = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
+        byte[] bytes = BitConverter.GetBytes(song_position).ToArray().Concat(BitConverter.GetBytes(song_duration).ToArray()).ToArray();
         while (!oracle_ready && attempts < max_attempts)
         {
             attempts++;
             Thread.Sleep(400);
-            Console.Write("checking from pbi");
             WriteLog("checking from pbi");
         }
         if (attempts >= max_attempts)
             return;
-        byte byt = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
-        byte[] bytes = BitConverter.GetBytes(song_position).ToArray().Concat(BitConverter.GetBytes(song_duration).ToArray()).ToArray();
-
-        Console.WriteLine("We playing? " + byt);
-        WriteLog("We playing? " + byt);
-        Write_Bytes(4, 8, bytes, byt, 0);
+        WriteLog("We playing? " + byt + " we reseting? " + reset_pos);
+        Write_Bytes(4, 8, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
+        //don't reset position when (duration == 0 and reset pos == 0)
+        reset_pos = 0;
     }
     private static async void S_MediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args){
         GlobalSystemMediaTransportControlsSessionMediaProperties mediaProperties = await sender.TryGetMediaPropertiesAsync();
@@ -192,10 +204,10 @@ class DeviceHandler{
                 if (read_thumb && !writing_serial)
                 {
                     read_thumb = false;
+                    reset_pos = 1;
                     writing_serial = true;
                     await ThumbNailSend(sender);
                     //Write_Bytes(2, (uint)System.Text.Encoding.UTF8.GetByteCount(Curr), System.Text.Encoding.UTF8.GetBytes(Curr), 0, 0);
-                    Console.WriteLine("Serial writing complete " + previous_info);
                     WriteLog("Serial writing complete " + previous_info);
                     writing_serial = false;
                 }
@@ -206,6 +218,7 @@ class DeviceHandler{
                 if (read_thumb && !writing_serial)
                 {
                     read_thumb = false;
+                    reset_pos = 1;
                     writing_serial = true;
                     await ThumbNailSend(sender);
                     writing_serial = false;
@@ -215,11 +228,9 @@ class DeviceHandler{
     }
     private static async Task ThumbNailSend(GlobalSystemMediaTransportControlsSession sender){
         GlobalSystemMediaTransportControlsSessionMediaProperties mediaProperties = await sender.TryGetMediaPropertiesAsync();
-        Console.WriteLine("Got info");
         WriteLog("Got info");
         if (mediaProperties.Thumbnail == null)
         {
-            Console.WriteLine("No thumbnail");
             WriteLog("No thumbnail");
             await Task.Delay(2000);
             mediaProperties = await sender.TryGetMediaPropertiesAsync();
@@ -267,7 +278,6 @@ class DeviceHandler{
     }
     private static Task<int> Resize(){
         UInt16 attempts = 0;
-        Console.WriteLine("Resize");
         WriteLog("Resize");
         MagickImage img = new MagickImage();
         try{
@@ -279,20 +289,16 @@ class DeviceHandler{
 
         }
         catch (MagickFileOpenErrorException){
-            Console.WriteLine("error opening file");
             WriteLog("error opening file");
             img_exists = false;
             read_thumb = true;
         }
         catch (MagickCorruptImageErrorException){
-            Console.WriteLine("error insufficient data");
             WriteLog("error insufficient data");
             img_exists = false;
             read_thumb = true;
         }
         previous_info = Curr;
-        Write_Bytes(3, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
-        //Write_Bytes(3, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
         while (!oracle_ready)
         {
             if (attempts >= max_attempts)
@@ -301,13 +307,24 @@ class DeviceHandler{
             }
             attempts++;
             Thread.Sleep(400);
-            Console.Write("checking for text ");
+            WriteLog("checking for text ");
+        }
+        Write_Bytes(3, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+        //Write_Bytes(3, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+        attempts = 0;
+        while (!oracle_ready)
+        {
+            if (attempts >= max_attempts)
+            {
+                return Task.FromResult(0);
+            }
+            attempts++;
+            Thread.Sleep(400);
             WriteLog("checking for text ");
         }
         Write_Bytes(2, (uint)System.Text.Encoding.UTF8.GetByteCount(Curr), System.Text.Encoding.UTF8.GetBytes(Curr), 0, 0);
         if(img_exists){
             // Add padding
-            Console.WriteLine("image exists");
             WriteLog("image exists");
             int imageSize = Math.Max(img.Width, img.Height);
             img.Extent(imageSize, imageSize, Gravity.Center, MagickColors.Black);
@@ -317,7 +334,6 @@ class DeviceHandler{
             bytes = ConvertTo565(bytes);
             if (bytes != null)
             {
-                Console.WriteLine("Image Width: " + img.Width + "\nImage height: " + img.Height + "\nImage bytes: " + bytes.Length);
                 WriteLog("Image Width: " + img.Width + "\nImage height: " + img.Height + "\nImage bytes: " + bytes.Length);
             }
             if(bytes == null || pixels == null)
@@ -331,7 +347,6 @@ class DeviceHandler{
                 }
                 attempts++;
                 Thread.Sleep(400);
-                Console.Write("checking for image ");
                 WriteLog("checking for image ");
             }
             Write_Bytes(1, (uint)bytes.Length, bytes, (ushort)img.Width, (ushort)img.Height);
@@ -342,24 +357,33 @@ class DeviceHandler{
         Thread readThread = new Thread(Read);
 
         serialPort.PortName = "COM3";
-        serialPort.BaudRate = 115200;//115200;921600
+        serialPort.BaudRate = 921600;//115200;921600
         serialPort.Parity = Parity.Even;
         serialPort.DataBits = 8;
         serialPort.StopBits = StopBits.Two;
-        serialPort.Handshake = Handshake.None;
-        
+        serialPort.Handshake = Handshake.RequestToSend;
+        serialPort.DtrEnable = true;
+        //serialPort.DsrHolding
         serialPort.ReadTimeout = 500;
         serialPort.WriteTimeout = 100000;
         try
         {
             serialPort.Open();
             readThread.Start();
+            if (serialPort.DsrHolding)
+            {
+                
+            }
+            while (!oracle_ready)
+            {
+                Thread.Sleep(400);
+                WriteLog("checking for device ");
+            }
             //Write_Bytes(3, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
             Write_Bytes(3, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
         }
         catch (FileNotFoundException)
         {
-            Console.WriteLine("No such device. Ensure Selected com port is correct and device is plugged in.");
             WriteLog("No such device. Ensure Selected com port is correct and device is plugged in.");
         }
     }
@@ -368,7 +392,8 @@ class DeviceHandler{
         byte cmd;
         double vol;
         while(read_uart){
-            try{
+            try
+            {
                 mes = serialPort.ReadByte();
                 string message = Convert.ToChar(mes).ToString();
                 string stst = "reg";
@@ -378,7 +403,6 @@ class DeviceHandler{
                 if (mes == 8)
                 {
                     stst = serialPort.ReadLine();
-                    Console.WriteLine("Serial error: '" + stst + "'");
                     WriteLog("Serial error: '" + stst + "'");
                     serial_error = 1;
                 }
@@ -392,9 +416,7 @@ class DeviceHandler{
                 }
                 if (mes == 6)
                 {
-                    Console.Write("Serial responded: ");
                     stst = serialPort.ReadLine();
-                    Console.WriteLine("'" + stst + "'");
                     WriteLog("Serial responded: '" + stst + "'");
                 }
                 if (mes == '')
@@ -402,7 +424,6 @@ class DeviceHandler{
                     try
                     {
                         cmd = (byte)serialPort.ReadChar();
-                        Console.WriteLine("Command: " + cmd);
                         WriteLog("Command: " + cmd);
                         if (cmd <= 3 && playback_device != null)
                         {
@@ -429,7 +450,6 @@ class DeviceHandler{
                             else if (cmd == 5)
                             {
                                 await gsmtcs.TryTogglePlayPauseAsync();
-                                Console.WriteLine(gsmtcs.SourceAppUserModelId);
                                 WriteLog(gsmtcs.SourceAppUserModelId);
                                 //Console.WriteLine("Time is: " + gsmtcs.GetTimelineProperties().Position);
                             }
@@ -440,7 +460,6 @@ class DeviceHandler{
                         }
                         if (gsmtcs == null)
                         {
-                            Console.WriteLine("GSMTCS is null :(");
                             WriteLog("GSMTCS is null :(");
                         }
                     }
@@ -449,8 +468,13 @@ class DeviceHandler{
 
                     }
                 }
+                else
+                {
+                    //WriteLog(serialPort.ReadLine());
+                }
             }
-            catch(TimeoutException){
+            catch (TimeoutException)
+            {
                 //Console.WriteLine("UART read timed out");
             }
         }
@@ -458,10 +482,10 @@ class DeviceHandler{
     private static void Write_Bytes(byte tag, uint length, byte[]? s, ushort width, ushort height, UInt32 dur = 0){
         if (serial_error != 0)
         {
-            Console.WriteLine("Error");
+            WriteLog("Error");
             Thread.Sleep(1000);
             serial_error = 0;
-            oracle_ready = true;
+            //oracle_ready = true;
             return;
         }
         if (s == null)
@@ -477,7 +501,6 @@ class DeviceHandler{
         byte[] header = new byte[12]{tag, bytleng[0], bytleng[1], bytleng[2], bytwidth[0], bytwidth[1], bytheight[0], bytheight[1],
         bytdur[0], bytdur[1], bytdur[2], bytdur[3]};
         byte[] bytes = (tag==3)? header.ToArray() : header.Concat(s.Take((int)length).ToArray()).ToArray();//what the fuck is this madness???
-        Console.WriteLine("Total bytes to be sent: " + bytes.Count() +  " Tag: " + tag + " Length: " + length);
         WriteLog("Total bytes to be sent: " + bytes.Count() +  " Tag: " + tag + " Length: " + length);
         if (tag == 2)
         {
@@ -492,12 +515,10 @@ class DeviceHandler{
         }
         catch (InvalidOperationException)
         {
-            Console.WriteLine("Device disconnected, InvalidOp");
             WriteLog("Device disconnected, InvalidOp");
         }
         catch (IOException)
         {
-            Console.WriteLine("Device disconnected, IOEx");
             WriteLog("Device disconnected, IOEx");
         }
     }

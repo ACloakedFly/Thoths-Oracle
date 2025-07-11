@@ -1,3 +1,25 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
+// data.h
+
 #include <string.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -113,7 +135,10 @@ extern const lv_img_dsc_t icon_artist_rgb;
 //LCD
 #define LCD_HOST  SPI2_HOST
 
-#define LCD_PIXEL_CLOCK_HZ     25*480*320//(20 * 1000 * 1000)
+#define LVGL_TICK_PERIOD_MS    2//2
+#define LVGL_HANDLER_PERIOD_MS    20//2
+
+#define LCD_PIXEL_CLOCK_HZ     (1000/LVGL_HANDLER_PERIOD_MS)*480*320
 #define LCD_BK_LIGHT_ON_LEVEL  1
 #define LCD_BK_LIGHT_OFF_LEVEL !LCD_BK_LIGHT_ON_LEVEL
 
@@ -121,30 +146,20 @@ extern const lv_img_dsc_t icon_artist_rgb;
 // The pixel number in horizontal and vertical
 #define LCD_H_RES              320
 #define LCD_V_RES              480
-#define LCD_BUF 36
+#define LCD_BUF 42
 
 // Bit number used to represent command and parameter
 #define LCD_CMD_BITS           8
 #define LCD_PARAM_BITS         8
 
-#define LVGL_TICK_PERIOD_MS    40//2
-
-//Brightness stuff
-#define LEDC_TIMER              LEDC_TIMER_0
-#define LEDC_MODE               LEDC_LOW_SPEED_MODE
-#define LEDC_OUTPUT_IO          GPIO_NUM_2 // Define the output GPIO
-#define LEDC_CHANNEL            LEDC_CHANNEL_0
-#define LEDC_DUTY_RES           LEDC_TIMER_13_BIT // Set duty resolution to 13 bits
-#define LEDC_DUTY               (4096) // Set duty to 50%. (2 ** 13) * 50% = 4096
-#define LEDC_FREQUENCY          (4000) // Frequency in Hertz. Set frequency at 4 kHz
 
 
 //Functions
 extern void lvgl_ui(lv_disp_t *disp);
 extern void inputs_main();
 extern void serial_task(void *pvParameters);
-extern void serial_setup();
+//extern void serial_setup();
 extern void ui_setup(void *pvParameters);
-//extern void tick_inc_handler(void *pvParameters);
-extern void lv_handler_handler(void *pvParameters);
+extern void UpdateInfo(void*v);
+extern void timer_incer(void *pvParameters);
 extern void serial_jtag_write(uint8_t msg_type, char *msg, uint16_t length, TickType_t ticks);

@@ -1,4 +1,33 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
+// lcd_setup.c
+
 #include "data.h"
+static lv_disp_draw_buf_t disp_buf; // contains internal graphic buffer(s) called draw buffer(s)
+static lv_disp_drv_t disp_drv;      // contains callback functions
+lv_color_t *buf1;
+lv_color_t *buf2;
+lv_disp_t *disp;
+esp_timer_handle_t lvgl_tick_timer = NULL;
+void timer_incer(void* v);
 
 static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
@@ -23,10 +52,18 @@ static void increase_lvgl_tick()//lv_timer_t *tiem)
     /* Tell LVGL how many milliseconds has elapsed */
     lv_tick_inc(LVGL_TICK_PERIOD_MS);
 }
+void timer_incer(void* v){
+    const esp_timer_create_args_t lvgl_tick_timer_args = {
+        .callback = &increase_lvgl_tick,
+        .name = "lvgl_tick"
+    };
+    ESP_LOGI(TAG, "Install LVGL tick timer");
 
+    ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LVGL_TICK_PERIOD_MS * 1000));  
+    vTaskDelete(NULL);
+}
 void ui_setup(void *pvParameters){
-    static lv_disp_draw_buf_t disp_buf; // contains internal graphic buffer(s) called draw buffer(s)
-    static lv_disp_drv_t disp_drv;      // contains callback functions
 
     ESP_LOGI(TAG, "Initialize SPI bus");
     spi_bus_config_t buscfg = {
@@ -82,12 +119,12 @@ void ui_setup(void *pvParameters){
     lv_init();
     // alloc draw buffers used by LVGL
     // it's recommended to choose the size of the draw buffer(s) to be at least 1/10 screen sized
-    lv_color_t *buf1 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DMA);
+    buf1 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DEFAULT);
     assert(buf1);
-    lv_color_t *buf2 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DMA);
+    buf2 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DMA);
     assert(buf2);
+    
     // initialize LVGL draw buffers
-    //lv_disp_draw_buf_init(&disp_buf, buf1, buf2, LCD_H_RES * LCD_BUF);
     lv_disp_draw_buf_init(&disp_buf, buf1, buf2, LCD_H_RES * LCD_BUF);
 
     ESP_LOGI(TAG, "Register display driver to LVGL");
@@ -100,25 +137,10 @@ void ui_setup(void *pvParameters){
     disp_drv.full_refresh = 0;
     disp_drv.screen_transp = 0;
     disp_drv.antialiasing = 0;
-    lv_disp_t *disp = lv_disp_drv_register(&disp_drv);
-
-    ESP_LOGI(TAG, "Install LVGL tick timer");
-    const esp_timer_create_args_t lvgl_tick_timer_args = {
-        .callback = &increase_lvgl_tick,
-        .name = "lvgl_tick"
-    };
-
-    esp_timer_handle_t lvgl_tick_timer = NULL;
-    ESP_ERROR_CHECK(esp_timer_create(&lvgl_tick_timer_args, &lvgl_tick_timer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LVGL_TICK_PERIOD_MS * 1000));    
+    disp_drv.direct_mode = 0;
+    disp_drv.sw_rotate = 0;
+    disp = lv_disp_drv_register(&disp_drv);
     
     lvgl_ui(disp);
-    ESP_LOGI(TAG, "Hi");
-    while (1) {
-        // raise the task priority of LVGL and/or reduce the handler period can improve the performance
-        vTaskDelay(pdMS_TO_TICKS(20));//pdMS_TO_TICKS(1));
-        // The task running lv_timer_handler should have lower priority than that running `lv_tick_inc`
-        lv_timer_handler();
-    }
-    ESP_LOGI(TAG, "UI Setup returned");
+    //vTaskDelete(NULL);
 }
