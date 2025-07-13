@@ -27,6 +27,7 @@ const char TAG[] = {"dev"};
 
 //We just set up the mutexes and the tasks
 void app_main(void){
+    esp_log_level_set(TAG, ESP_LOG_INFO);
     info_mutex = xSemaphoreCreateBinary();
     xSemaphoreGive(info_mutex);
     img_mutex = xSemaphoreCreateBinary();
@@ -34,11 +35,12 @@ void app_main(void){
     date_time_mutex = xSemaphoreCreateBinary();
     xSemaphoreGive(date_time_mutex);
     ui_setup(NULL);
+
     //Keep the ui and serial communications segregated to their own cores to minimize any waiting on each other. 
     //Also LVGL is not thread safe (aside from lv_tick_inc which should be at higher priority)
-    xTaskCreatePinnedToCore(timer_incer,"ticker_task", configMINIMAL_STACK_SIZE*2,NULL,1,&ticker_task,0);//should be higher than update task
+    xTaskCreatePinnedToCore(timer_incer,"ticker_task", configMINIMAL_STACK_SIZE*2,NULL,1,&ticker_task,0);//should be higher priority than ui_task
     xTaskCreatePinnedToCore(UpdateInfo,"ui_task", configMINIMAL_STACK_SIZE*2,NULL,10,&update_info,0);
-    esp_log_level_set(TAG, ESP_LOG_INFO);
+
     xTaskCreatePinnedToCore(serial_task, "serial_event_task", 4096, NULL, 5, &uart_task, 1);
     xTaskCreatePinnedToCore(inputs_main, "inputs_task", configMINIMAL_STACK_SIZE + 1000 + 1024, NULL, 1, &uart_writer_task, 1);
 }

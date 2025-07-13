@@ -46,6 +46,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include "esp_sleep.h"
 #include "driver/pulse_cnt.h"
 #include "esp_lcd_ili9341.h"
+#include "esp_task_wdt.h"
 
 #define UTF8 1
 #define UTF16 2
@@ -59,26 +60,43 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define TX_BUF_SIZE (512)
 
 //Inputs
-#define PREV_PIN 7//4
-#define MUTE_PIN 2//22
-#define PLAY_PIN 8//4//18
-#define NEXT_PIN 6//5//23
-#define ENC_EDGE_PIN 4//6//13
-#define ENC_LEVEL_PIN 5//7//14
+#define PREV_PIN        7
+#define MUTE_PIN        2
+#define PLAY_PIN        8
+#define NEXT_PIN        6
+#define ENC_EDGE_PIN    4
+#define ENC_LEVEL_PIN   5
+
+//Inputs commands
+#define CMD_VAL_VOL_DN      1
+#define CMD_VAL_VOL_UP      2
+#define CMD_VAL_MUTE        3
+#define CMD_VAL_PREV        4
+#define CMD_VAL_PLAY_PAUSE  5
+#define CMD_VAL_NEXT        6
+
+//Message types
+#define IMG_TAG         1
+#define TEXT_TAG        2
+#define SYS_MSG_TAG     3
+#define DUR_POS_TAG     4
+#define CMD_TAG         5
+#define INFO_TAG        6
+#define STATUS_TAG      7
+#define ERROR_TAG       8
 
 //Display
-#define PIN_NUM_SCLK        11//8//32//17//   GPIO_NUM_18
-#define PIN_NUM_MOSI        10//9//33//18//   GPIO_NUM_19
-#define PIN_NUM_LCD_DC      9//10//25//19//   GPIO_NUM_17//5 or 17
-#define PIN_NUM_LCD_RST     12//11//26//21//   GPIO_NUM_22//3 is used as rx for uart
-#define PIN_NUM_LCD_CS      13//12//27//22//   GPIO_NUM_4
-#define PIN_NUM_MISO        -1//Unuse
+#define PIN_NUM_SCLK        11
+#define PIN_NUM_MOSI        10
+#define PIN_NUM_LCD_DC      9
+#define PIN_NUM_LCD_RST     12
+#define PIN_NUM_LCD_CS      13
+#define PIN_NUM_MISO        -1//Unused
 
 //Image
-#define IMG_WIDTH 304
-#define IMG_HEIGHT 304
-#define IMG_SIZE IMG_HEIGHT*IMG_WIDTH*2
-#define BOFER_SIZE RX_BUF_SIZE*6
+#define IMG_WIDTH   304
+#define IMG_HEIGHT  304
+#define IMG_SIZE IMG_HEIGHT*IMG_WIDTH*2//Images are in RGB565 format so every pixel needs 2 bytes
 
 //Text, added multiple opions to allow for faster testing, can ignore this section
 #define TEXT_SIZE 512
@@ -96,11 +114,11 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define char_cpy wmemcpy
 #endif
 
-
+#define DUR_POS_BYTES 8
 extern const char TAG[3];
 extern char name[TEXT_SIZE];
 extern bool updated;
-extern uint8_t album_cover[IMG_SIZE + RX_BUF_SIZE];//was 256
+extern uint8_t album_cover[IMG_SIZE + RX_BUF_SIZE];//Added an extra buffer at the end just incase
 extern uint8_t width, height;
 extern uint32_t cover_bytes;
 extern uint32_t song_duration;
@@ -119,6 +137,7 @@ extern SemaphoreHandle_t info_mutex;
 extern SemaphoreHandle_t img_mutex;
 extern SemaphoreHandle_t date_time_mutex;
 
+//Icons arrays and image headers for LVGL
 extern const uint8_t icon_title[352];
 extern const lv_img_dsc_t icon_title_rgb;
 
@@ -131,28 +150,25 @@ extern const lv_img_dsc_t icon_artist_rgb;
 //LCD
 #define LCD_HOST  SPI2_HOST
 
-#define LVGL_TICK_PERIOD_MS    2//2
-#define LVGL_HANDLER_PERIOD_MS    20//2
+#define LVGL_TICK_PERIOD_MS    2//Smaller seems better
+#define LVGL_HANDLER_PERIOD_MS    20//This effectively determines the framerate LVGL refreshes at, provided the CPU can keep up
 
-#define LCD_PIXEL_CLOCK_HZ     (1000/LVGL_HANDLER_PERIOD_MS)*480*320
+#define LCD_PIXEL_CLOCK_HZ     (1000/LVGL_HANDLER_PERIOD_MS)*480*320//This is how fast the SPI connection will communicate. Seems to work best when it is the same as the framerate
 
 
 // The pixel number in horizontal and vertical
 #define LCD_H_RES              320
 #define LCD_V_RES              480
-#define LCD_BUF 42
+#define LCD_BUF 42//Bigger is better, but it seems the ESP32S3 doesn't have enough DMA memory for more than 42
 
-// Bit number used to represent command and parameter
+// Bit number used to represent command and parameter bits for SPI connection
 #define LCD_CMD_BITS           8
 #define LCD_PARAM_BITS         8
-
-
 
 //Functions
 extern void lvgl_ui(lv_disp_t *disp);
 extern void inputs_main();
 extern void serial_task(void *pvParameters);
-//extern void serial_setup();
 extern void ui_setup(void *pvParameters);
 extern void UpdateInfo(void*v);
 extern void timer_incer(void *pvParameters);
