@@ -20,9 +20,8 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 */
 // icons.c
 
-
+//Icons for song title, album, and artist
 #include "data.h"
-#include "stddef.h"
 
 const lv_img_dsc_t icon_title_rgb = {
   .header.always_zero = 0,

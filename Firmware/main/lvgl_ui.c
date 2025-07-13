@@ -22,6 +22,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 
 #include "data.h"
 
+//Thumbnail image header
 const lv_img_dsc_t img_cover_rgb = {
   .header.always_zero = 0,
   .header.w = IMG_WIDTH,
@@ -37,14 +38,17 @@ static lv_disp_rot_t rotation = LV_DISP_ROT_NONE;
 //char name_info[50];
 bool updated = false;
 
-CHAR_TYPE song_title[CHARS];
-CHAR_TYPE song_album[CHARS];
-CHAR_TYPE song_artist[CHARS];
+//Array to hold song duration text ie hh:mm:ss
 char song_dur[11];
+//Array to hold song position text same as above
 char song_pos[11];
+//Array to hold date text dd/mm/yy, day and month order can be swapped from software side
 char date_string[15];
+//Array to hold current time ie hh:mm
 char time_string[8];
-static uint32_t song_secs = 0;
+//Song position counter and duration local to this thread
+static uint32_t song_secs = 0, song_durs = 0;
+//Last current time stored to compare against new time. Used to cut down on label updates 
 static uint8_t sys_last_min = 0;
 //System day of the month
 static uint8_t system_date = 0;
@@ -54,30 +58,35 @@ static uint8_t system_month = 0;
 static uint16_t system_year = 0;
 //System time in seconds
 static uint32_t system_time = 0;
-lv_timer_t *song_time, *ref_time;
-static bool song_play = false, text_dirty = false;
-
+//Timer for updating song position and system time
+lv_timer_t *song_time;
+//Bool for checking if song is playing, increment song position when true. Bool for updating song metadata only when text has changed
+static bool song_play = false;
+//LVGL points for setting position of bar at the top of the screen
 lv_point_t points[] = {{12,26}, {308,26}};
 
 static void update_timer(lv_timer_t * timer);
-
-static lv_style_t style, style_bar;
+//Styles for general objects
+static lv_style_t style;
 
 void lvgl_ui(lv_disp_t *disp)
 {
-
+    //LVGL display setup
     lv_obj_t *scr = lv_disp_get_scr_act(disp);
     lv_disp_set_bg_color(disp, lv_color_black());
     lv_disp_set_rotation(disp, rotation);
 
+    //LVGL theming
     lv_style_init(&style);
     lv_style_set_bg_color(&style, lv_color_hex(0x000000));
     lv_style_set_text_color(&style, lv_color_hex(0xffffff));
-    lv_style_set_bg_color(&style_bar, lv_color_hex(0xbb00cc));
+    //lv_style_set_bg_color(&style_bar, lv_color_hex(0xbb00cc));
     
+    //Set theme to the screen
     lv_obj_add_style(scr, &style, 0);
 
     ESP_LOGI(TAG, "LVGL base");
+    //Setup of all the objects' positions, sizes, sources, scroll speeds, etc.
     //Title icon
     l_title = lv_img_create(scr);
     lv_img_set_src(l_title, &icon_title_rgb);
@@ -86,7 +95,7 @@ void lvgl_ui(lv_disp_t *disp)
     //Title data text
     ld_title = lv_label_create(scr);
     lv_label_set_long_mode(ld_title, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_obj_set_style_anim_speed(ld_title, 20, LV_PART_MAIN);
+    lv_obj_set_style_anim_speed(ld_title, 20, LV_PART_MAIN);//Used to slow down scroll speed
     lv_obj_set_width(ld_title, 286);
     lv_label_set_text(ld_title, "No Data");
     lv_obj_align(ld_title, LV_ALIGN_TOP_LEFT, 24, 42);
@@ -120,7 +129,6 @@ void lvgl_ui(lv_disp_t *disp)
     //Album cover
     img_cover = lv_img_create(scr);
     lv_img_set_src(img_cover, &img_cover_rgb);
-    //lv_img_set_zoom(img_cover, 360);
     lv_obj_align(img_cover, LV_ALIGN_CENTER, 0, 54);
 
     //Song duration
@@ -136,7 +144,6 @@ void lvgl_ui(lv_disp_t *disp)
     lv_obj_set_size(ld_bar, 304, 6);
     lv_obj_align(ld_bar, LV_ALIGN_TOP_LEFT, 8, 450);
     lv_bar_set_value(ld_bar, 70, LV_ANIM_OFF);
-    lv_obj_add_style(ld_bar, &style_bar, 0);
     lv_obj_set_style_bg_color(ld_bar, lv_color_hex(0xee00ff), LV_PART_INDICATOR);
 
     //Date and time
@@ -153,13 +160,14 @@ void lvgl_ui(lv_disp_t *disp)
     lv_label_set_text(ld_time, "22:13");
     lv_obj_align(ld_time, LV_ALIGN_TOP_LEFT, 258, 4);
 
+    //Bar under date and time
     ll_line = lv_line_create(scr);
     lv_line_set_points(ll_line, points, 2);
     lv_style_set_line_width(&style, 3);
     lv_style_set_line_color(&style, lv_color_hex(0xbb00bb));
     lv_obj_add_style(ll_line, &style, 0);
 
-       
+    //Custom font declration and assigning it to all the text
     LV_FONT_DECLARE(dejavu_sans_16_phl);   
     lv_obj_set_style_text_font(ld_album, &dejavu_sans_16_phl, 0);
     lv_obj_set_style_text_font(ld_artist, &dejavu_sans_16_phl, 0);
@@ -169,6 +177,7 @@ void lvgl_ui(lv_disp_t *disp)
     lv_obj_set_style_text_font(ld_time, &dejavu_sans_16_phl, 0);
     lv_obj_set_style_text_font(ld_date, &dejavu_sans_16_phl, 0);
 
+    //Timer for updating song position and system time
     song_time = lv_timer_create(update_timer, 1000, NULL);
     lv_timer_set_repeat_count(song_time, -1);
     lv_timer_ready(song_time);
@@ -176,79 +185,89 @@ void lvgl_ui(lv_disp_t *disp)
     ESP_LOGI(TAG, "LVGL Done, onto update");
 }
 
-static void decode_unicode(uint16_t bytes){
-    CHAR_TYPE wide_data[bytes/BITS+1];
-    wide_data[bytes/BITS] = 0;
-    memset(song_title, 0, CHARS);
-    memset(song_album, 0, CHARS);
-    memset(song_artist, 0, CHARS);
-
-    if(xSemaphoreTake(info_mutex, 0) == pdTRUE){     
+//Text decoder
+static void decode_unicode(){
+    //Create array to hold text data. Having configurable char type is a hold over from messing around with UTF16
+    CHAR_TYPE wide_data[TEXT_SIZE+1];
+    //Ping info mutex with no block time. Arrays are written to from serial_task, which takes priority. So we are trying to be as fast as possible.
+    //Copy the data into local fields and return the mutex ASAP. We'll process it later at our own pace.
+    if(xSemaphoreTake(info_mutex, 0) == pdTRUE){   
+        //If serial_task has not signalled that any of the values have changed, lets return the mutex, then exit the function. We have nothing to do anyways
         if(name_dirty == false){
             xSemaphoreGive(info_mutex);
             return;
         }
-        else
-            name_dirty = false;
-        text_dirty = true;
-        for(int i = 0; i < bytes; i += BITS){
+        //Data has changed, so we'll reset the flag set by serial_task
+        name_dirty = false;
+        //Copy the data into local fields and cast to uint8_t
+        for(int i = 0; i < TEXT_SIZE; i += BITS){
             wide_data[i/BITS] = (uint8_t)name[i];
-        }  
-        memset(song_dur, 0, 11);
-        if(song_duration != 0){
-            sprintf(song_dur, "%.2u:%.2u:%.2u", (uint8_t)(song_duration/3600), (uint8_t)((song_duration/60)%60), (uint8_t)(song_duration%60));
-            lv_bar_set_range(ld_bar, 0, song_duration);
         }
-        else{
-            memcpy(song_dur, "00:00:00", 9);
-            lv_bar_set_range(ld_bar, 0, 1);
-        }
+        song_durs = song_duration;
+        //Return the mutex. The rest we can do on our own copies without getting in the way of serial_task
         xSemaphoreGive(info_mutex);
     }
-    //printf("\nESP unicode decoded says: '%ls'\n", wide_data);
-    uint8_t song_index = 0, album_i = 0, title_i = 0;//, artist_i = 0;
-    for(int i = 0; i < bytes/BITS; i++){
+    else //We weren't able to acquire the mutex, no data has changed anyways, so we'll exit the function
+        return;
+    //If we have gotten this far, then we successfully acquired the mutex, data has changed and we have copied it.
+    //Initialize some counters for keeping track of where we are in the wide_data array
+    uint8_t song_index = 0;
+    uint16_t artist_i = 0, album_i = 0;
+    //Loop through all the bytes in the array, we're looking for new lines (UTF-8 number 10)
+    for(int i = 0; i < TEXT_SIZE/BITS; i++){
+        //Whenever we hit a new line, we replace it with a 0 to null terminate the string before it,
+        //then record the proceeding index as the start of the next string (provided it's within range)
         if(wide_data[i] == 10){
-            switch (song_index){
-                case 0:
-                    char_cpy(song_title, wide_data, i);
-                    song_index++;
-                    title_i = i;
-                    break;
-                case 1:
-                    char_cpy(song_album, &wide_data[title_i+1], i-title_i-1);
-                    album_i = i;
-                    song_index++;
-                    break;
-                case 2:
-                    char_cpy(song_artist, &wide_data[album_i+1], i-album_i-1);
-                    //artist_i = i;
-                    song_index++;
-                    break;
-                default:
+            if(song_index == 0){
+                song_index++;
+                wide_data[i] = 0;
+                album_i = i < TEXT_SIZE? i+1 : i;
+            }
+            else if(song_index == 1){
+                song_index++;
+                wide_data[i] = 0;
+                artist_i = i < TEXT_SIZE? i+1 : i;
+            }
+            else{
+                wide_data[i] = 0;
                 break;
             }
         }
     }
-    if(text_dirty){
-        lv_label_set_text(ld_title, (char*)song_title);
-        lv_label_set_text(ld_album, (char*)song_album);
-        lv_label_set_text(ld_artist, (char*)song_artist);
-        lv_label_set_text(ld_dur, song_dur);
-        printf("Text dirty\n");
-        text_dirty = false;
+    //Pass the address of the start of the strings that we found as the text to set the labels to.
+    //Since the function expects a null terminated string, which we terminated ourselves, 
+    //we effectively have three dynamically sized arrays for holding strings of any sizes less than 512 characters in total
+    lv_label_set_text(ld_title, (char*)wide_data);
+    lv_label_set_text(ld_album, (char*)(&wide_data[album_i]));
+    lv_label_set_text(ld_artist, (char*)(&wide_data[artist_i]));
+    //Zero out song duration array
+    memset(song_dur, 0, 11);
+    //Gotta be careful here, LVGL does not like bars with maximums of 0, so set it to 1 in that case. 
+    if(song_durs != 0){
+        //Construct our duration string by taking the total seconds and converting into hours, minutes component, and seconds component
+        sprintf(song_dur, "%.2u:%.2u:%.2u", (uint8_t)(song_durs/3600), (uint8_t)((song_durs/60)%60), (uint8_t)(song_durs%60));
+        lv_bar_set_range(ld_bar, 0, song_durs);
     }
+    else{
+        memcpy(song_dur, "00:00:00", 9);
+        lv_bar_set_range(ld_bar, 0, 1);
+    }
+    lv_label_set_text(ld_dur, song_dur);
 }
 
+//Timer for updating song position and date/time
 static void update_timer(lv_timer_t * timer){
     system_time++;
+    //Store the system minute separately. We don't display the seconds, so let's only update the label on a minute change
     uint8_t sys_min = (uint8_t)((system_time/60)%60);
+    //Only update the song position if the song is actually playing
     if(song_play){
         song_secs++;
         sprintf(song_pos, "%.2u:%.2u:%.2u", (uint8_t)(song_secs/3600), (uint8_t)((song_secs/60)%60), (uint8_t)(song_secs%60));
         lv_label_set_text(ld_pos, song_pos);
         lv_bar_set_value(ld_bar, song_secs, LV_ANIM_ON);
     }
+    //Update time on minute change. Might as well do the date here too. No point for more frequent updates
     if(sys_min != sys_last_min){
         sprintf(time_string, "%.2u:%.2u", (uint8_t)(system_time/3600), sys_min);
         lv_label_set_text(ld_time, time_string);
@@ -257,9 +276,9 @@ static void update_timer(lv_timer_t * timer){
     }
     sys_last_min = sys_min;
 }
-
+//Really just copying the data, the decoding happens in update_timer
 static void decode_timer(void*v){
-    
+    //Same as with text, ping mutex, grab data for ourselves if it has changed, return mutex
     if(xSemaphoreTake(info_mutex, 0) == pdTRUE){  
         song_play = song_playing;
         if(position_dirty){
@@ -280,18 +299,23 @@ static void decode_timer(void*v){
     }
 }
 
+//LVGL superloop
 void UpdateInfo(void*v){
     while(1){
         lv_timer_handler();
-        decode_unicode(512);
+        //Periodically handle text and date/time updates
+        decode_unicode();
         decode_timer(NULL);
+        //Ping image mutex.
         if(xSemaphoreTake(img_mutex, 0) == pdTRUE){
+            //This is a little bit different. If the image is dirty, we just remind LVGL where the image data is stored, and it will flush it to the display. No extra arrays needed
             if(img_dirty){
                 img_dirty = false;
                 lv_img_set_src(img_cover, &img_cover_rgb);
             }
             xSemaphoreGive(img_mutex);
         }
+        //Delay calls until about the time of the next screen refresh. Faster may improve smoothness, or harm it. Slower will definitely reduce the framerate
         vTaskDelay(pdMS_TO_TICKS(LVGL_HANDLER_PERIOD_MS));
     }
 }

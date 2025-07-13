@@ -29,6 +29,7 @@ lv_disp_t *disp;
 esp_timer_handle_t lvgl_tick_timer = NULL;
 void timer_incer(void* v);
 
+//ESP ILI9341 driver flush callback for LVGL to know when flushing is done
 static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
     lv_disp_drv_t *disp_driver = (lv_disp_drv_t *)user_ctx;
@@ -36,6 +37,7 @@ static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_
     return false;
 }
 
+//LVGL callback to do the actual flushing
 static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
 {
     esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
@@ -47,11 +49,13 @@ static void lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t 
     esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
 }
 
-static void increase_lvgl_tick()//lv_timer_t *tiem)
+//An ESP timer is registered to handle LVGL tick incrementing
+static void increase_lvgl_tick()
 {
     /* Tell LVGL how many milliseconds has elapsed */
     lv_tick_inc(LVGL_TICK_PERIOD_MS);
 }
+//A task is created with a higher priority than main LVGL task to handle timer registration
 void timer_incer(void* v){
     const esp_timer_create_args_t lvgl_tick_timer_args = {
         .callback = &increase_lvgl_tick,
@@ -63,6 +67,7 @@ void timer_incer(void* v){
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer, LVGL_TICK_PERIOD_MS * 1000));  
     vTaskDelete(NULL);
 }
+
 void ui_setup(void *pvParameters){
 
     ESP_LOGI(TAG, "Initialize SPI bus");
@@ -142,5 +147,4 @@ void ui_setup(void *pvParameters){
     disp = lv_disp_drv_register(&disp_drv);
     
     lvgl_ui(disp);
-    //vTaskDelete(NULL);
 }

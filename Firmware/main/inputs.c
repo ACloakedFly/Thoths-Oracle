@@ -22,14 +22,15 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 
 #include "data.h"
 
+//Arrays for sending input commands. First number is to signal we are sending input command, second number is the command
 char cmd_vol_dn[2]      = {5, 1};
 char cmd_vol_up[2]      = {5, 2};
 char cmd_mute[2]        = {5, 3};
 char cmd_prev[2]        = {5, 4};
 char cmd_play_pause[2]  = {5, 5};
 char cmd_next[2]        = {5, 6};
-//char* TAG = "egr";
 
+//Button config, reused for simplicity
 button_config_t gpio_btn_cfg = {
     .type = BUTTON_TYPE_GPIO,
     .long_press_time = CONFIG_BUTTON_LONG_PRESS_TIME_MS,
@@ -40,17 +41,14 @@ button_config_t gpio_btn_cfg = {
     },
 };
 
+//Handles
 button_handle_t btn_previous;
 button_handle_t btn_pp;
 button_handle_t btn_next;
 button_handle_t btn_mute_tog;
 
-/*//testing
-gpio_config_t gp_high = {
-    .mode = GPIO_MODE_OUTPUT,
-};*/
-
-
+//Pulse counter configs. This is used for the rotary encoder for sending volume commands. 
+//Brightness rotary potentiometer acts as voltage divider sending direct voltage to LCD backlight input. No code required.
 pcnt_unit_config_t unit_config = {
     .high_limit = 1,
     .low_limit = -1,
@@ -60,12 +58,14 @@ pcnt_glitch_filter_config_t filter_config = {
     .max_glitch_ns = 10000,
 };
 pcnt_chan_config_t chan_config = {
-    .edge_gpio_num = ENC_EDGE_PIN,
-    .level_gpio_num = ENC_LEVEL_PIN,
+    .edge_gpio_num = ENC_LEVEL_PIN,
+    .level_gpio_num = ENC_EDGE_PIN,
 };
 pcnt_channel_handle_t pcnt_chan = NULL;
+//Watch points used for generating pulse counter events
 int watch_points[] = {-1, 0, 1};
 
+//Button callbacks. Send command array [input flag, command] over serial connection
 static void button_previous_cb(void *arg, void *data)
 {
     usb_serial_jtag_write_bytes(cmd_prev, 2, portDelay);
@@ -86,6 +86,7 @@ static void button_next_cb(void *arg, void *data)
     usb_serial_jtag_write_bytes(cmd_next, 2, portDelay);
 }
 
+//Add event to queue on pulse counter watch point reached. Loop at bottom will monitor queue for events
 static bool pcnt_on_reach(pcnt_unit_handle_t unit, const pcnt_watch_event_data_t *edata, void *user_ctx)
 {
     BaseType_t high_task_wakeup;
@@ -96,9 +97,6 @@ static bool pcnt_on_reach(pcnt_unit_handle_t unit, const pcnt_watch_event_data_t
 }
 
 void inputs_main(){
-    //testing
-    //gpio_config(&gp_high);
-    //gpio_set_level(GPIO_NUM_23, 1);
 
     //previous track
     gpio_btn_cfg.gpio_button_config.gpio_num = PREV_PIN;
@@ -143,9 +141,9 @@ void inputs_main(){
     // Report counter value
     int event_count = 0;
     while(1){
+        //What is my purpose? Your purpose is to wait for pcnt events :)
         if (xQueueReceive(queue, &event_count, pdMS_TO_TICKS(1000))) {
-            //printf("Event count '%d'\n", event_count);
-            //ESP_LOGI(TAG, "Watch point event, count: %d", event_count);
+            //Send command over serial based on rotation direction 
             if(event_count == -1){
                 usb_serial_jtag_write_bytes(cmd_vol_dn, 2, portDelay);
             }
@@ -153,6 +151,5 @@ void inputs_main(){
                 usb_serial_jtag_write_bytes(cmd_vol_up, 2, portDelay);
             }
         }
-        //vTaskDelay(pdMS_TO_TICKS(50));
     }
 }

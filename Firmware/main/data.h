@@ -55,7 +55,6 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define HEADER_BYTES 12
 
 #define portDelay 50
-#define BAUD_RATE 921600//115200
 #define RX_BUF_SIZE (1024)
 #define TX_BUF_SIZE (512)
 
@@ -75,12 +74,14 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define PIN_NUM_LCD_CS      13//12//27//22//   GPIO_NUM_4
 #define PIN_NUM_MISO        -1//Unuse
 
-#define IMG_WIDTH 304 //160, 224, 304
-#define IMG_HEIGHT 304//160, 224, 304
-#define IMG_SIZE IMG_HEIGHT*IMG_WIDTH*2//65536//140*140*3
+//Image
+#define IMG_WIDTH 304
+#define IMG_HEIGHT 304
+#define IMG_SIZE IMG_HEIGHT*IMG_WIDTH*2
+#define BOFER_SIZE RX_BUF_SIZE*6
 
+//Text, added multiple opions to allow for faster testing, can ignore this section
 #define TEXT_SIZE 512
-
 #if BITS == 1
 #define CHAR_SIZE uint8_t
 #define CHAR_TYPE unsigned char
@@ -98,9 +99,6 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 
 extern const char TAG[3];
 extern char name[TEXT_SIZE];
-//extern CHAR_TYPE song_title[CHARS];
-//extern CHAR_TYPE song_album[CHARS];
-//extern CHAR_TYPE song_artist[CHARS];
 extern bool updated;
 extern uint8_t album_cover[IMG_SIZE + RX_BUF_SIZE];//was 256
 extern uint8_t width, height;
@@ -121,8 +119,6 @@ extern SemaphoreHandle_t info_mutex;
 extern SemaphoreHandle_t img_mutex;
 extern SemaphoreHandle_t date_time_mutex;
 
-//extern const lv_img_dsc_t img_cover_rgb;
-
 extern const uint8_t icon_title[352];
 extern const lv_img_dsc_t icon_title_rgb;
 
@@ -139,8 +135,6 @@ extern const lv_img_dsc_t icon_artist_rgb;
 #define LVGL_HANDLER_PERIOD_MS    20//2
 
 #define LCD_PIXEL_CLOCK_HZ     (1000/LVGL_HANDLER_PERIOD_MS)*480*320
-#define LCD_BK_LIGHT_ON_LEVEL  1
-#define LCD_BK_LIGHT_OFF_LEVEL !LCD_BK_LIGHT_ON_LEVEL
 
 
 // The pixel number in horizontal and vertical
