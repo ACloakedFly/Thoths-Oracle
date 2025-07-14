@@ -299,7 +299,6 @@ void UpdateInfo(void*v){
         //Periodically handle text and date/time updates
         decode_unicode();
         decode_timer(NULL);
-        //Ping image mutex.
         if(xSemaphoreTake(img_mutex, 0) == pdTRUE){
             //This is a little bit different. If the image is dirty, we just remind LVGL where the image data is stored, and it will flush it to the display. No extra arrays needed
             if(img_dirty){

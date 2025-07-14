@@ -295,7 +295,7 @@ void serial_task(void *pvParameters){
                 continue;//Skip everything below. No data was received anyways
             }
         }//We now have frame metadata
-        error_check();//If error it will wait until data transmission ends and clear buffers and counters
+        error_check();
         if(header.tag == IMG_TAG){
             process_image();
         }
