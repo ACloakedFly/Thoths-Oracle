@@ -391,7 +391,8 @@ class DeviceHandler{
         int mes;
         byte cmd;
         double vol;
-        while(read_uart){
+        while (read_uart)
+        {
             try
             {
                 mes = serialPort.ReadByte();
@@ -476,6 +477,15 @@ class DeviceHandler{
             catch (TimeoutException)
             {
                 //Console.WriteLine("UART read timed out");
+            }
+            catch (OperationCanceledException)
+            {
+                WriteLog("Device has been disconnected");
+            }
+            catch (InvalidOperationException)
+            {
+                Thread.Sleep(4000);
+                WriteLog("The port is closed");
             }
         }
     }

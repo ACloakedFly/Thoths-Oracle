@@ -39,10 +39,6 @@ uint16_t name_counter = 0;
 uint32_t img_counter = 0;
 uint32_t song_duration = 1;
 uint32_t song_position = 0;
-uint32_t sys_time = 0;
-uint8_t sys_date = 0;
-uint8_t sys_month = 0;
-uint32_t sys_year = 0;
 uint8_t song_pos_bytes[DUR_POS_BYTES];
 bool name_dirty = false, position_dirty = false, time_dirty = false, img_dirty = false;
 bool song_playing = false;
@@ -51,12 +47,21 @@ SemaphoreHandle_t img_mutex = NULL;
 SemaphoreHandle_t date_time_mutex = NULL;
 
 int length = 0;
-char frame_header[HEADER_BYTES];
-uint32_t frame_length = 0;//Bytes 1, 2, and 3 of header
-uint16_t frame_width = 0;//Bytes 4 and 5 of header
-uint16_t frame_height = 0;//Bytes 6 and 7 of header
-uint32_t frame_duration = 0;//Bytes 8, 9, 10, and 11 of header
+char header_buffer[HEADER_BYTES];
 uint16_t read_status = 0;
+
+typedef struct frame_header{
+    uint8_t tag;
+    uint32_t length;
+    uint16_t width;
+    uint16_t height;
+    uint32_t duration;
+}frame_header;
+
+frame_header header = {0, 0, 0, 0, 0};
+static const frame_header empty_header = {0, 0, 0, 0, 0};
+
+sys_time system_time = {0, 0, 0, 0};
 
 //Setup the serial communication. Should be USB OTG. It will communicate as fast as it can up to how fast the host communicates and <= USB full speed I think 
 static int serial_setup(){
@@ -75,10 +80,11 @@ static int serial_setup(){
 
 //Break down the frame header bytes to know what to do with the data stream
 static void frame_metadata(void *pvParameters){
-    frame_length = (uint32_t)(frame_header[1] + (frame_header[2] << 8) + (frame_header[3] << 16));
-    frame_width = (uint16_t)(frame_header[4] + (frame_header[5] << 8));
-    frame_height = (uint16_t)(frame_header[6] + (frame_header[7] << 8));
-    frame_duration = (uint32_t)(frame_header[8] + (frame_header[9] << 8) + (frame_header[10] << 16) + (frame_header[11] << 24)); 
+    header.tag = header_buffer[0];
+    header.length = (uint32_t)(header_buffer[1] + (header_buffer[2] << 8) + (header_buffer[3] << 16));
+    header.width = (uint16_t)(header_buffer[4] + (header_buffer[5] << 8));
+    header.height = (uint16_t)(header_buffer[6] + (header_buffer[7] << 8));
+    header.duration = (uint32_t)(header_buffer[8] + (header_buffer[9] << 8) + (header_buffer[10] << 16) + (header_buffer[11] << 24)); 
     read_status = 0;
 }
 
@@ -86,25 +92,19 @@ static void frame_metadata(void *pvParameters){
 static uint8_t frame_start(void){
     length = 0;
     name_counter = 0;
-    frame_length = 0;
-    read_status = 0;
     img_counter = 0;
-    memset(frame_header, 0, HEADER_BYTES);
+    header = empty_header;
+    memset(header_buffer, 0, HEADER_BYTES);
     //Grab the first HEADER_BYTES bytes. These should be the header bytes, everything after will be data bytes
-    length = usb_serial_jtag_read_bytes(frame_header, HEADER_BYTES, (TickType_t)portDelay);
+    length = usb_serial_jtag_read_bytes(header_buffer, HEADER_BYTES, (TickType_t)portDelay);
     if(length == 0 || length != HEADER_BYTES){//something went wrong or no data in buffer
         idle = true;
         length = 0;
-        memset(frame_header, 0, HEADER_BYTES);
+        memset(header_buffer, 0, HEADER_BYTES);
         name_counter = 0;
         return 0;
     }
-    //We have received at least HEADER_BYTES bytes, assume they are the header bytes. Figure out what to expect
     frame_metadata(NULL);
-    //Echo what we received. Not neccessary, only useful for debugging
-    //char fd[71];
-    //sprintf(fd, "Frame data: %d, %lu, %u, %u, %lu", frame_header[0], frame_length, frame_width, frame_height, frame_duration);
-    //serial_jtag_write(6, fd, 71, portDelay);
     //Let superloop know that data is incoming
     idle = false;
     return 1;
@@ -113,11 +113,8 @@ static uint8_t frame_start(void){
 //Call this at the end of the data frame to reset counters and go back to idling
 static void frame_end(char *mes){
     idle = true;
-    length = 0;
-    name_counter = 0;
-    frame_length = 0;
-    img_counter = 0;
-    memset(frame_header, 0, HEADER_BYTES);
+    memset(header_buffer, 0, HEADER_BYTES);
+    header = empty_header;
     char tg[31];
     //Let host know that we finished, and where from. Location is useful for debugging
     sprintf(tg, "Finished from: %s", mes);
@@ -138,42 +135,37 @@ static void catch_and_release(void){
 static void error_reset(uint8_t erre){
     char mess[63];
     //Let host know something went wrong
-    sprintf(mess, "Serial error, clearing cover buffer, error code: %d, tag: %d", erre, frame_header[0]);
+    sprintf(mess, "Serial error, clearing cover buffer, error code: %d, tag: %d", erre, header.tag);
     serial_jtag_write(ERROR_TAG, mess, 63, portDelay);
     memset(album_cover, 0, IMG_SIZE);
     catch_and_release();
-    length = 0;
-    name_counter = 0;
-    frame_length = 0;
-    read_status = 0;
-    img_counter = 0;
     //Ready up for more data, and remind host we just handled an error
     frame_end("Error reset");
 }
 
 //Check header for common errors, like nonsense tag or too much data. Reset if anything is wrong and return error code. Return 1 if everything is alright
 static uint8_t error_check(void){
-    if(frame_header[0] > 4 || frame_header[0] == 0){
+    if(header.tag > DUR_POS_TAG || header.tag == 0){
         error_reset(2);
         return 2;
     }
-    else if (frame_length > IMG_SIZE){
+    else if (header.length > IMG_SIZE){
         error_reset(3);
         return 3;
     }
-    else if(frame_header[0] == IMG_TAG && (frame_height != IMG_HEIGHT || frame_width != IMG_WIDTH)){
+    else if(header.tag == IMG_TAG && (header.height != IMG_HEIGHT || header.width != IMG_WIDTH)){
         error_reset(4);
         return 4;
     }
-    else if (frame_header[0] == TEXT_TAG && frame_length > TEXT_SIZE){
+    else if (header.tag == TEXT_TAG && header.length > TEXT_SIZE){
         error_reset(5);
         return 5;
     }
-    else if (frame_header[0] == SYS_MSG_TAG && frame_length != 0){
+    else if (header.tag == SYS_MSG_TAG && header.length != 0){
         error_reset(6);
         return 6;
     }
-    else if (frame_header[0] == DUR_POS_TAG && frame_length != DUR_POS_BYTES){
+    else if (header.tag == DUR_POS_TAG && header.length != DUR_POS_BYTES){
         error_reset(7);
         return 7;
     }
@@ -193,7 +185,7 @@ static void process_image(void){
         else{//Increment img_counter so that on the next pass we know where in the array to place the data
             img_counter += read_status;
         }
-        if(img_counter >= frame_length){//We have read the expected number of bytes, or a little more (uh-oh). Ready up for new frame and let host know
+        if(img_counter >= header.length){//We have read the expected number of bytes, or a little more (uh-oh). Ready up for new frame and let host know
             frame_end("image");
         }
     }
@@ -206,13 +198,13 @@ static void process_image(void){
 //We don't need to zero out the name array since we null terminate the strings in ui_task
 static void process_text(void){
     if(xSemaphoreTake(info_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
-        read_status = usb_serial_jtag_read_bytes(&name[name_counter], frame_length, portDelay);
+        read_status = usb_serial_jtag_read_bytes(&name[name_counter], header.length, portDelay);
         name_counter += read_status;
         name_dirty = true;//Set dirty flag so ui_task knows that we changed the array
         xSemaphoreGive(info_mutex);
     }
     //Way less data is sent, it should all fit into the rx buffer, so less safeties are needed
-    if(name_counter >= frame_length || read_status == 0){//We have read the expected number of bytes, or a little more or none (uh-oh). Ready up for new frame and let host know
+    if(name_counter >= header.length || read_status == 0){//We have read the expected number of bytes, or a little more or none (uh-oh). Ready up for new frame and let host know
         frame_end("text");
     }
 }
@@ -220,20 +212,20 @@ static void process_text(void){
 //This one is a little different, not a lot of data is sent, so it is all packed into the header itself
 static void process_sys_msg(void){
     char messy[34];
-    if(frame_width != 0){//Let's just make sure the date and month aren't 0. No point in updating to a nonsense date
+    if(header.width != 0){//Let's just make sure the date and month aren't 0. No point in updating to a nonsense date
         //Grab mutex, copy data from the header into the shared fields, then return mutex
         if(xSemaphoreTake(date_time_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
             time_dirty = true;//Set dirty flag so ui_task knows that we changed the array
-            sys_date = frame_header[4];
-            sys_month = frame_header[5];
-            sys_year = frame_header[6] + (frame_header[7] << 8);
-            sys_time = frame_header[8] + (frame_header[9] << 8) + (frame_header[10] << 16);
-            sprintf(messy, "Received date: %d/%d/%lu", sys_date, sys_month, sys_year);
+            system_time.date = (uint8_t)(header.width & 255);//header_buffer[4];
+            system_time.month = header.width >> 8;//header_buffer[5];
+            system_time.year = header.height;
+            system_time.seconds = header.duration;
+            sprintf(messy, "Received date: %d/%d/%u", system_time.date, system_time.month, system_time.year);
             serial_jtag_write(INFO_TAG, messy, 34, portDelay);
             xSemaphoreGive(date_time_mutex);
         }
     }
-    //Know more sys_msg data is sent past the frame_header, so no need to count any bytes received
+    //No more sys_msg data is sent past the frame_header, so no need to count any bytes received
     frame_end("sys_msg");//Ready up and let host know we are ready.
 }
 
@@ -245,7 +237,7 @@ static void process_dur_pos(void){
         read_status = usb_serial_jtag_read_bytes(&song_pos_bytes, DUR_POS_BYTES, portDelay);
         song_duration = song_pos_bytes[4] + (song_pos_bytes[5] << 8) + (song_pos_bytes[6] << 16) + (song_pos_bytes[7] << 24);
         //Some applications do not broadcast a song duration or position. In that case, we don't want to reset the position everytime the play status changes (ie paused/unpaused)
-        if(!(song_duration == 0 && frame_height == 0)){
+        if(!(song_duration == 0 && header.height == 0)){
             //When the song duration is 0 and the frame_height is 0, we know that the host is telling us that the song was only paused/unpaused and no position will be sent
             //So we won't let ui_task know that anything changed. ui_task handles incrementing the position. 
             //If we tell ui_task the position has changed, it will reset it to zero everytime we unpause since we have no accurate position here (it's 0)
@@ -257,8 +249,8 @@ static void process_dur_pos(void){
         //Song position seems to lag a little, so we give it a boost here. Not really sure if it makes it more accurate on aaverage, but feels better
         song_position++;
         //Host sends play status in the frame_header
-        song_playing = frame_width;
-        sprintf(playing, "Serial received play status: %u pos: %lu duration: %lu", frame_width, song_position, song_duration);
+        song_playing = header.width;
+        sprintf(playing, "Serial received play status: %u pos: %lu duration: %lu", header.width, song_position, song_duration);
         serial_jtag_write(INFO_TAG, playing, 72, portDelay);
         xSemaphoreGive(info_mutex);
     }
@@ -283,7 +275,8 @@ void serial_task(void *pvParameters){
     //Zero out counters and arrays
     name_counter = 0;
     memset(name, 0, TEXT_SIZE);
-    memset(frame_header, 0, HEADER_BYTES);
+    memset(header_buffer, 0, HEADER_BYTES);
+    header = empty_header;
     frame_end("start");
     uint16_t idle_counter = 0;
     //Report the reason for the last restart, useful for debugging
@@ -303,18 +296,16 @@ void serial_task(void *pvParameters){
             }
         }//We now have frame metadata
         error_check();//If error it will wait until data transmission ends and clear buffers and counters
-        //we now know no garbage is being sent and header makes sense
-        //Proceed with processing data
-        if(frame_header[0] == IMG_TAG){
+        if(header.tag == IMG_TAG){
             process_image();
         }
-        else if (frame_header[0] == TEXT_TAG){
+        else if (header.tag == TEXT_TAG){
             process_text();
         }
-        else if (frame_header[0] == SYS_MSG_TAG){
+        else if (header.tag == SYS_MSG_TAG){
             process_sys_msg();
         }
-        else if (frame_header[0] == DUR_POS_TAG){
+        else if (header.tag == DUR_POS_TAG){
             process_dur_pos();
         }
     }

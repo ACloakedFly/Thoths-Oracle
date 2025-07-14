@@ -123,15 +123,19 @@ extern uint8_t width, height;
 extern uint32_t cover_bytes;
 extern uint32_t song_duration;
 extern uint32_t song_position;
-extern uint32_t sys_time;
-extern uint8_t sys_date;
-extern uint8_t sys_month;
-extern uint32_t sys_year;
 extern bool name_dirty;
 extern bool position_dirty;
 extern bool time_dirty;
 extern bool img_dirty;
 extern bool song_playing;
+
+typedef struct sys_time{
+    uint32_t seconds;
+    uint8_t date;
+    uint8_t month;
+    uint16_t year;
+} sys_time;
+extern sys_time system_time;
 
 extern SemaphoreHandle_t info_mutex;
 extern SemaphoreHandle_t img_mutex;
