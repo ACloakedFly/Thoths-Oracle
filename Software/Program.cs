@@ -29,15 +29,20 @@ namespace Contexts
         static Role role = Role.Multimedia;
 
         public static int volume_sens = 5;
+        public static bool continue_read = true;
+        public static bool continue_config = true;
+        public static bool continue_media = true;
 
         static Image selected_img = SystemIcons.Exclamation.ToBitmap();
 
-        
+        public static Thread read_thread = new(DeviceHandler.Read);
+        public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
+        public static Thread media_thread = new(DeviceHandler.HandlerSetup);
         private static void Setup(){
             DeviceHandler.playback_device = new CoreAudioController().GetDefaultDevice(deviceType, role);
             dpd = DeviceHandler.playback_device;
         }
-        
+
         private GUI()
         {
             //string path_icon = "chevron_up.ico"; 
@@ -54,20 +59,20 @@ namespace Contexts
             volume_sense.DropDownItems.Add(increment_five);
             increment_ten = new ToolStripMenuItem("±10", null, new EventHandler(OnTen));
             volume_sense.DropDownItems.Add(increment_ten);
-            
+
             default_audio_output = new ToolStripMenuItem("Default Device", null, new EventHandler(OnDefaultAudio));
             output.DropDownItems.Add(default_audio_output);
             default_audio_output.Image = selected_img;
-            
+
             exit.MouseUp += new MouseEventHandler(OnClose);
             //
-            contextMenu.Items.AddRange(new ToolStripItem[]{port, volume_sense, output, exit});
+            contextMenu.Items.AddRange(new ToolStripItem[] { port, volume_sense, output, exit });
             notifyIcon = new NotifyIcon();
             notifyIcon.Icon = SystemIcons.Shield;
             notifyIcon.Visible = true;
             notifyIcon.Text = "My icon!";
             notifyIcon.ContextMenuStrip = contextMenu;
-            
+
             notifyIcon.MouseClick += new MouseEventHandler(OnPort);
 
             output.DropDown.MouseEnter += new EventHandler(OutputEnter);
@@ -77,6 +82,7 @@ namespace Contexts
 
             Setup();
             SetSelections();
+            //InitializeComponent();
         }
 
         private void SetSelections(){
@@ -231,23 +237,24 @@ namespace Contexts
             
         }
 
-        private void OnClose(object? sender, EventArgs e){            
+        private void OnClose(object? sender, EventArgs e){
+            continue_config = false;
+            continue_read = false;
+            continue_media = false;           
             ExitThread();
         }
 
-        //[STAThread]
-        public static async Task Main(string[] args)
+        [STAThread]
+        //public static async Task Main(string[] args)
+        public static void Main(string[] args)
         {
-
-            // Create the MyApplicationContext, that derives from ApplicationContext,
-            // that manages when the application should exit.
             Setup();
-            //GUI context = new GUI();
-            //ApplicationContext app_context = new Form1();
-            // Run the application with the specific context. It will exit when
-            await DeviceHandler.HandlerSetup(args);
+            GUI context = new();
+            media_thread.Start();
+            Application.Run(context);
+            //await DeviceHandler.HandlerSetup(args);
             // all forms are closed.
-            //Application.Run(context);
+
         }
     }
 }//net7.0-windows10.0.17763.0

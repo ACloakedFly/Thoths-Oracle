@@ -34,7 +34,7 @@ class DeviceHandler{
     static bool queued_media = false;
     static IRandomAccessStreamReference? queued_thumb_stream;
     static bool oracle_ready = true;
-    static bool debug_log = true, debug_console = true;
+    static bool debug_log = true, debug_console = false;
     class Info_Buffers
     {
         public string Title { get; set; }
@@ -73,15 +73,18 @@ class DeviceHandler{
     };
     public static Oracle_Configuration config = new Oracle_Configuration();
 
-    public static async Task HandlerSetup(string[] args)
+    //public static async Task HandlerSetup(string[] args)
+    public static async void HandlerSetup()
     {
-        Thread readThread = new(Read);
-        readThread.Start();
+        //Thread readThread = new(Read);
+        //readThread.Start();
+        GUI.read_thread.Start();
         if (debug_log)
             DebugLogs();
         GeneralSetup();
-        Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
-        config_thread.Start();
+        //Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
+        //config_thread.Start();
+        GUI.config_thread.Start();
         var gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         gsmtcs = gsmtcsm.GetCurrentSession();
         if (gsmtcs != null)
@@ -99,7 +102,7 @@ class DeviceHandler{
         gsmtcsm.CurrentSessionChanged += Gsmtcsm_Current_Session_Changed;
         byte counter = 0;
         byte discon_counter = 0;
-        while (true)
+        while (GUI.continue_media)
         {
             if (config_changed)
             {
@@ -368,12 +371,12 @@ class DeviceHandler{
             device_connected = false;
         }
     }
-    private static async void Read()
+    public static async void Read()
     {
         int mes;
         byte cmd;
         double vol;
-        while (true)
+        while (GUI.continue_read)
         {
             try
             {
@@ -464,7 +467,7 @@ class DeviceHandler{
             {
                 WriteLog(ex.ToString());
             }
-            
+
         }
     }
     private static Task<int> Write_Bytes(byte tag, uint length, byte[]? s, ushort width, ushort height, UInt32 dur = 0)

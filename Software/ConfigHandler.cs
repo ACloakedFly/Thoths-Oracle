@@ -1,6 +1,7 @@
 using YamlDotNet.Serialization;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization.NamingConventions;
+using Contexts;
 
 class ConfigHandler
 {
@@ -115,9 +116,9 @@ class ConfigHandler
         watcher.Filter = default_path;
         watcher.IncludeSubdirectories = true;
         watcher.EnableRaisingEvents = true;
-        while (true)
+        while (GUI.continue_config)
         {
-            Thread.Sleep(10000);
+            Thread.Sleep(1000);
         }
     }
     private static void OnChanged(object sender, FileSystemEventArgs e)
