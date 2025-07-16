@@ -1,12 +1,1 @@
-#Configuration file
-
-#Inline comments won't be saved
-VolumeSensitivity: 3
-PlaybackDevice: Speakers (Realtek(R) Audio)
-ComPort: COM3
-
-#Common speeds are 921600, 115200, 
-Speed: 9600
-MonitoredProgram:
-- MusicBee.exe
-- vlc.exe
+#Configuration file#Inline comments won't be saved#Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu tooVolumeSensitivity: 4VolumeSensitivityOptions:- 1- 3- 5- 4- 11PlaybackDevice: SpeakersComPort: COM3#Common speeds are 921600, 115200, Speed: 9600MonitoredProgram:- MusicBee.exe- vlc.exe
