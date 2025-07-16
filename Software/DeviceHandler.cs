@@ -4,53 +4,112 @@ using Windows.Storage.Streams;
 using System.IO.Ports;
 using ImageMagick;
 using AudioSwitcher.AudioApi.CoreAudio;
-using System.Drawing.Imaging;
 using Contexts;
 using Windows.Media;
 using System.Diagnostics;
 class DeviceHandler{
     public static CoreAudioDevice? playback_device;
-    static bool writing_serial = false;
-    static bool read_thumb = true;
+    static bool updating_media = false;
+    static bool queued_media = false;
+    static IRandomAccessStreamReference? queued_thumb_stream;
     static bool oracle_ready = true;
     static bool debug_log = true, debug_console = true;
-    static Int32 hash;
-    static string Curr = "", album_buffer = "", artist_buffer = "", title_buffer = "", previous_info = "";
+    class Info_Buffers
+    {
+        public string Title { get; set; }
+        public string Album { get; set; }
+        public string Artist { get; set; }
+        public Info_Buffers(string ti = "No Data", string al = "No Data", string ar = "No Data")
+        {
+            Title = ti;
+            Album = al;
+            Artist = ar;
+        }
+    }
+    static string current_media = "";
+    static string captured_media = "";
+    static bool first_call = true;
+    static bool device_connected = false;
+    static bool device_reconnected = false;
     static UInt32 song_duration = 0, song_position = 0;
     static UInt16 reset_pos = 0;
-    static string LastString = "";
-    static string source = "", info = "info.txt";
     static string logs = "log_", log_dir = "logs\\";
     static SerialPort serialPort = new SerialPort();
-    static bool read_uart = true;
+    public static bool config_changed = false;
     static bool img_exists = false;
     const UInt16 max_attempts = 20;
     static uint serial_error = 0;
-    //public static GlobalSystemMediaTransportControlsSessionManager? gsmtcsm;
     public static GlobalSystemMediaTransportControlsSession? gsmtcs;
-    public static async Task HandlerSetup(string[] args) {
+    public static GlobalSystemMediaTransportControlsSession? previous_control_session;
+    public class Oracle_Configuration
+    {
+        public ushort VolumeSensitivity { get; set; }
+        public string? PlaybackDevice { get; set; }
+        public string? ComPort { get; set; }
+        public UInt32 Speed { get; set; }
+        public List<string>? MonitoredProgram { get; set; }
 
-        if(debug_log)
+    };
+    public static Oracle_Configuration config = new Oracle_Configuration();
+
+    public static async Task HandlerSetup(string[] args)
+    {
+        Thread readThread = new(Read);
+        readThread.Start();
+        if (debug_log)
             DebugLogs();
-        serial_setup();
         GeneralSetup();
-        var gsmtcsm = await GetSystemMediaTransportControlsSessionManager();
+        Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
+        config_thread.Start();
+        var gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         gsmtcs = gsmtcsm.GetCurrentSession();
         if (gsmtcs != null)
         {
-            if (gsmtcs.SourceAppUserModelId.Equals(source))
+            if (config.MonitoredProgram != null)
             {
-                var mediaProperties = await GetMediaProperties(gsmtcs);
+                if (!config.MonitoredProgram.Contains(gsmtcs.SourceAppUserModelId))
+                {
+                    gsmtcs = null;
+                }
             }
-            else
-                gsmtcs = null;
         }
         //playback_device = new CoreAudioController().GetDefaultDevice(deviceType, role);
         Gsmtcsm_Current_Session_Changed(gsmtcsm, null);
         gsmtcsm.CurrentSessionChanged += Gsmtcsm_Current_Session_Changed;
-
-
-        Console.ReadLine();
+        byte counter = 0;
+        byte discon_counter = 0;
+        while (true)
+        {
+            if (config_changed)
+            {
+                config_changed = false;
+                GeneralSetup();
+            }
+            counter++;
+            counter %= 5;
+            if (counter == 0 && gsmtcs != null)
+            {
+                if (!captured_media.Equals(current_media))
+                {
+                    await Update_Media(gsmtcs, null);
+                }
+                else if (device_reconnected)
+                {
+                    device_reconnected = false;
+                    await Update_Media(gsmtcs, null);
+                }
+            }
+            discon_counter++;
+            discon_counter %= 50;
+            if (discon_counter == 0)
+            {
+                if (!device_connected)
+                {
+                    serial_setup();
+                }
+            }
+            Thread.Sleep(100);
+        }
     }
 
     private static void DebugLogs()
@@ -60,8 +119,9 @@ class DeviceHandler{
         File.AppendAllText(logs, "\nLog Start:\n");
     }
 
-    private static void WriteLog(string log_text, string? path = null)
+    public static void WriteLog(string log_text, bool new_line = true, string? path = null)
     {
+        string nl = new_line ? "\n" : "";
         if (debug_log)
         {
             if (path == null)
@@ -76,26 +136,15 @@ class DeviceHandler{
             }
         }
         if (debug_console)
-            Console.WriteLine(log_text);
+            Console.Write(log_text + nl);
     }
 
-    private static void GeneralSetup()
+    public static void GeneralSetup()
     {
-        string[] data;
-        try
-        {
-            data = File.ReadAllLines(info);
-        }
-        catch (FileNotFoundException)
-        {
-            string[] default_data = { "5", "Default Device", "COM3", "" };
-            data = default_data;
-            File.AppendAllText("info.txt", "5\nDefault Device\nCOM3\n");
-        }
-        if (data.Length >= 4)
-        {
-            source = data[3];
-        }
+        config = new Oracle_Configuration();
+        config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
+        //ConfigHandler.SaveConfig(ConfigHandler.default_path, config);
+        serial_setup();
     }
 
     private static async Task read_from_stream(Windows.Storage.Streams.Buffer buf, IRandomAccessStreamReference stre){
@@ -104,8 +153,6 @@ class DeviceHandler{
             try{
                 IRandomAccessStreamWithContentType fd = await stre.OpenReadAsync();//IRandomAccessStreamReferenceMethods
                 await fd.ReadAsync(buf, buf.Capacity, InputStreamOptions.ReadAhead);
-                //Console.WriteLine("wefw");
-                read_thumb = true;
             }
             catch(Exception ex){
                 WriteLog(ex.ToString());
@@ -114,149 +161,133 @@ class DeviceHandler{
     private static void Gsmtcsm_Current_Session_Changed(GlobalSystemMediaTransportControlsSessionManager sender, CurrentSessionChangedEventArgs? args)
     {
         var session = sender.GetCurrentSession();
-        if (session != null)
+        if (session == null)
         {
-            WriteLog("Source App changed to: " + session.SourceAppUserModelId);
-            if (source == "" || session.SourceAppUserModelId.Equals(source))
+            WriteLog("No current session");
+            return;
+        }
+        WriteLog("Source App changed to: " + session.SourceAppUserModelId);
+        if (config.MonitoredProgram != null)
+        {
+            if (!config.MonitoredProgram.Contains(session.SourceAppUserModelId))
             {
-                session.MediaPropertiesChanged += S_MediaPropertiesChanged;
-                S_MediaPropertiesChanged(session, null);
-                session.PlaybackInfoChanged += PlaybackInfoChanged;
-                PlaybackInfoChanged(session, null);
-                //session.TimelinePropertiesChanged += TimeLineInfoChanged;
-                //TimeLineInfoChanged(session, null);
-                gsmtcs = session;
-            }
-            else
-            {
-                WriteLog("Session does not match");
+                WriteLog("Session does not match selections");
+                return;
             }
         }
-        else
+        WriteLog("Which matches a selection");
+        if (previous_control_session != null)
         {
-            WriteLog("No Current seesion");
+            WriteLog("Removing previous session: " + previous_control_session.SourceAppUserModelId);
+            previous_control_session.MediaPropertiesChanged -= MediaChanged;
+            previous_control_session.PlaybackInfoChanged -= PlaybackInfoChanged;
         }
-    }
-    private static void TimeLineInfoChanged(GlobalSystemMediaTransportControlsSession sender, TimelinePropertiesChangedEventArgs? args)
-    {
-        GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties = sender.GetTimelineProperties();
-        if (timelineProperties != null)
-        {
-            //Console.WriteLine("Duration: " + timelineProperties.EndTime + " Position: " + timelineProperties.Position.TotalSeconds);
-            //WriteLog("Duration: " + timelineProperties.EndTime + " Position: " + timelineProperties.Position.TotalSeconds);
-            song_duration = (UInt32)timelineProperties.EndTime.TotalSeconds;
-            song_position = (UInt32)timelineProperties.Position.TotalSeconds;
-            //Console.WriteLine("Total seconds: " + song_duration);
-        }
-        else
-        {
-            song_duration = 0;
-            song_position = 0;
-        }
+        previous_control_session = session;
+        session.MediaPropertiesChanged += MediaChanged;
+        session.PlaybackInfoChanged += PlaybackInfoChanged;
+        gsmtcs = session;
     }
     private static void PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
     {
         GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = sender.GetPlaybackInfo();
-        UInt16 attempts = 0;
-        TimeLineInfoChanged(sender, null);
+        GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties = sender.GetTimelineProperties();
+        song_duration = (UInt32)timelineProperties.EndTime.TotalSeconds;
+        song_position = (UInt32)timelineProperties.Position.TotalSeconds;
         byte byt = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
         byte[] bytes = BitConverter.GetBytes(song_position).ToArray().Concat(BitConverter.GetBytes(song_duration).ToArray()).ToArray();
-        while (!oracle_ready && attempts < max_attempts)
-        {
-            attempts++;
-            Thread.Sleep(400);
-            WriteLog("checking from pbi");
-        }
-        if (attempts >= max_attempts)
-            return;
         WriteLog("We playing? " + byt + " we reseting? " + reset_pos);
         Write_Bytes(4, 8, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
         //don't reset position when (duration == 0 and reset pos == 0)
         reset_pos = 0;
     }
-    private static async void S_MediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args){
-        GlobalSystemMediaTransportControlsSessionMediaProperties mediaProperties = await sender.TryGetMediaPropertiesAsync();
-        TimeLineInfoChanged(sender, null);
-        if (mediaProperties != null)
+    private static async Task<int> Update_Media(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
+    {
+        GlobalSystemMediaTransportControlsSessionMediaProperties media_properties = await sender.TryGetMediaPropertiesAsync();
+        if (media_properties == null)
+            return 0;
+        Info_Buffers info_ = new()
         {
-            if (mediaProperties.Artist.Length == 0)
-                artist_buffer = "No Data";
-            else
-                artist_buffer = mediaProperties.Artist;
-
-            if (mediaProperties.Title.Length == 0)
-                title_buffer = "No Data";
-            else
-                title_buffer = mediaProperties.Title;
-
-            if (mediaProperties.AlbumTitle.Length == 0)
-                album_buffer = "No Data";
-            else
-                album_buffer = mediaProperties.AlbumTitle;
-            Curr = title_buffer + "\n" + album_buffer + "\n" + artist_buffer + "\n";
-            if (!Curr.Equals(LastString) && mediaProperties.GetHashCode() != hash)
-            {
-                LastString = Curr;
-                hash = mediaProperties.GetHashCode();
-                //PlaybackInfoChangedEventArgs ar;
-                //ar = PlaybackInfoChangedEventArgs.FromAbi(0);
-                PlaybackInfoChanged(sender, null);
-                if (read_thumb && !writing_serial)
-                {
-                    read_thumb = false;
-                    reset_pos = 1;
-                    writing_serial = true;
-                    await ThumbNailSend(sender);
-                    //Write_Bytes(2, (uint)System.Text.Encoding.UTF8.GetByteCount(Curr), System.Text.Encoding.UTF8.GetBytes(Curr), 0, 0);
-                    WriteLog("Serial writing complete " + previous_info);
-                    writing_serial = false;
-                }
-            }
-            else if (!previous_info.Equals(Curr))
-            {
-                await Task.Delay(10000);
-                if (read_thumb && !writing_serial)
-                {
-                    read_thumb = false;
-                    reset_pos = 1;
-                    writing_serial = true;
-                    await ThumbNailSend(sender);
-                    writing_serial = false;
-                }
-            }
-        }
-    }
-    private static async Task ThumbNailSend(GlobalSystemMediaTransportControlsSession sender){
-        GlobalSystemMediaTransportControlsSessionMediaProperties mediaProperties = await sender.TryGetMediaPropertiesAsync();
-        WriteLog("Got info");
-        if (mediaProperties.Thumbnail == null)
+            Title = media_properties.Title.Length > 0 ? media_properties.Title : "No Data",
+            Album = media_properties.AlbumTitle.Length > 0 ? media_properties.AlbumTitle : "No Data",
+            Artist = media_properties.Artist.Length > 0 ? media_properties.Artist : "No Data"
+        };
+        if (updating_media)
         {
-            WriteLog("No thumbnail");
-            await Task.Delay(2000);
-            mediaProperties = await sender.TryGetMediaPropertiesAsync();
+            queued_media = true;
+            queued_thumb_stream = media_properties.Thumbnail;
+            captured_media = info_.Title + "\n" + info_.Album + "\n" + info_.Artist + "\n";
+            WriteLog("Updating queue to\n" + captured_media);
+            return 0;
         }
-        await Get_Thumbnail(mediaProperties.Thumbnail);
-        await Resize();
-    }
-    private static async Task<GlobalSystemMediaTransportControlsSessionManager> GetSystemMediaTransportControlsSessionManager(){
-        return await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        else
+        {
+            queued_media = false;
+            updating_media = true;
+            current_media = info_.Title + "\n" + info_.Album + "\n" + info_.Artist + "\n";
+            if (first_call)
+            {
+                first_call = false;
+                captured_media = current_media;
+            }
+            WriteLog("We are current\n" + current_media);
+        }
+        IRandomAccessStreamReference thumb_stream = media_properties.Thumbnail;
+        if (queued_media)
+        {
+            WriteLog("Sending queued media");
+            queued_media = false;
+            if (queued_thumb_stream != null)
+                thumb_stream = queued_thumb_stream;
+            current_media = captured_media;
+        }
+        await Write_Bytes(3, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+        await Write_Bytes(2, (uint)System.Text.Encoding.UTF8.GetByteCount(current_media), System.Text.Encoding.UTF8.GetBytes(current_media), 0, 0);
+        await Get_Thumbnail(thumb_stream);
+        await Resize_Thumbnail();
+        updating_media = false;
+        return 0;
     }
 
-    private static async Task<GlobalSystemMediaTransportControlsSessionMediaProperties?> GetMediaProperties(GlobalSystemMediaTransportControlsSession? session){
-        if(session == null)
-            return null;
-        return await session.TryGetMediaPropertiesAsync();
-        /*try{
-            return await session.TryGetMediaPropertiesAsync();
+    private static async void MediaChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
+    {
+        reset_pos = 1;
+        await Update_Media(sender, args);
+    }
+    private static async Task<int> Resize_Thumbnail()
+    {
+        WriteLog("Resize");
+        MagickImage img = new MagickImage();
+        try{
+            img = new MagickImage("thumb.jpg");
+            MagickGeometry size = new MagickGeometry(304, 304);
+            size.IgnoreAspectRatio = false;
+            img_exists = true;
+            img.Resize(size);
         }
-        catch (System.NullReferenceException){
-            return null;
-        }*/
+        catch (MagickFileOpenErrorException){
+            WriteLog("error opening file");
+            img_exists = false;
+        }
+        catch (MagickCorruptImageErrorException){
+            WriteLog("error insufficient data");
+            img_exists = false;
+        }
+        if(!img_exists)
+            return 0;
+        // Add padding
+        int imageSize = Math.Max(img.Width, img.Height);
+        img.Extent(imageSize, imageSize, Gravity.Center, MagickColors.Black);
+        img.Write("thumby.jpg");
+        IPixelCollection<byte> pixels = img.GetPixels();
+        byte[]? bytes = pixels.ToByteArray(PixelMapping.RGB);
+        if (bytes == null)
+            return 0;
+        bytes = ConvertTo565(bytes);
+        await Write_Bytes(1, (uint)bytes.Length, bytes, (ushort)img.Width, (ushort)img.Height);
+        return 0;
     }
     private static async Task Get_Thumbnail(IRandomAccessStreamReference thumby){
         Windows.Storage.Streams.Buffer thumb_buffer = new Windows.Storage.Streams.Buffer(5000000);
-
-
         await read_from_stream(thumb_buffer, thumby);
 
         DataReader read_buffer = DataReader.FromBuffer(thumb_buffer);
@@ -276,197 +307,115 @@ class DeviceHandler{
             }
         }
     }
-    private static Task<int> Resize(){
-        UInt16 attempts = 0;
-        WriteLog("Resize");
-        MagickImage img = new MagickImage();
-        try{
-            img = new MagickImage("thumb.jpg");
-            MagickGeometry size = new MagickGeometry(304, 304);
-            size.IgnoreAspectRatio = false;
-            img_exists = true;
-            img.Resize(size);
-
-        }
-        catch (MagickFileOpenErrorException){
-            WriteLog("error opening file");
-            img_exists = false;
-            read_thumb = true;
-        }
-        catch (MagickCorruptImageErrorException){
-            WriteLog("error insufficient data");
-            img_exists = false;
-            read_thumb = true;
-        }
-        previous_info = Curr;
-        while (!oracle_ready)
+    private static void serial_setup()
+    {
+        if (serialPort.IsOpen)
         {
-            if (attempts >= max_attempts)
-            {
-                return Task.FromResult(0);
-            }
-            attempts++;
-            Thread.Sleep(400);
-            WriteLog("checking for text ");
+            serialPort.Close();
         }
-        Write_Bytes(3, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
-        //Write_Bytes(3, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
-        attempts = 0;
-        while (!oracle_ready)
-        {
-            if (attempts >= max_attempts)
-            {
-                return Task.FromResult(0);
-            }
-            attempts++;
-            Thread.Sleep(400);
-            WriteLog("checking for text ");
-        }
-        Write_Bytes(2, (uint)System.Text.Encoding.UTF8.GetByteCount(Curr), System.Text.Encoding.UTF8.GetBytes(Curr), 0, 0);
-        if(img_exists){
-            // Add padding
-            WriteLog("image exists");
-            int imageSize = Math.Max(img.Width, img.Height);
-            img.Extent(imageSize, imageSize, Gravity.Center, MagickColors.Black);
-            img.Write("thumby.jpg");
-            IPixelCollection<byte> pixels = img.GetPixels();
-            byte[]? bytes = pixels.ToByteArray(PixelMapping.RGB);
-            bytes = ConvertTo565(bytes);
-            if (bytes != null)
-            {
-                WriteLog("Image Width: " + img.Width + "\nImage height: " + img.Height + "\nImage bytes: " + bytes.Length);
-            }
-            if(bytes == null || pixels == null)
-                return Task.FromResult(0);
-            attempts = 0;
-            while (!oracle_ready)
-            {
-                if (attempts >= max_attempts)
-                {
-                    return Task.FromResult(0);
-                }
-                attempts++;
-                Thread.Sleep(400);
-                WriteLog("checking for image ");
-            }
-            Write_Bytes(1, (uint)bytes.Length, bytes, (ushort)img.Width, (ushort)img.Height);
-        }
-        return Task.FromResult(0);
-    }
-    private static void serial_setup(){
-        Thread readThread = new Thread(Read);
-
-        serialPort.PortName = "COM3";
-        serialPort.BaudRate = 921600;//115200;921600
+        serialPort.PortName = config.ComPort;
+        serialPort.BaudRate = (int)config.Speed;
         serialPort.Parity = Parity.Even;
         serialPort.DataBits = 8;
         serialPort.StopBits = StopBits.Two;
         serialPort.Handshake = Handshake.RequestToSend;
         serialPort.DtrEnable = true;
-        //serialPort.DsrHolding
-        serialPort.ReadTimeout = 500;
-        serialPort.WriteTimeout = 100000;
+        serialPort.ReadTimeout = 5000;
+        serialPort.WriteTimeout = 10000;
         try
         {
             serialPort.Open();
-            readThread.Start();
-            if (serialPort.DsrHolding)
-            {
-                
-            }
+            device_connected = true;
             while (!oracle_ready)
             {
                 Thread.Sleep(400);
-                WriteLog("checking for device ");
+                WriteLog("Port opened, waiting for device to be ready ");
             }
-            //Write_Bytes(3, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
             Write_Bytes(3, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+            if (gsmtcs != null)
+                device_reconnected = true;
         }
         catch (FileNotFoundException)
         {
             WriteLog("No such device. Ensure Selected com port is correct and device is plugged in.");
+            serialPort.Close();
+            device_connected = false;
+        }
+        catch (ArgumentException)
+        {
+            WriteLog("COM port is not valid. Ensure it is in the format of COM##");
+            device_connected = false;
         }
     }
-    private static async void Read(){
+    private static async void Read()
+    {
         int mes;
         byte cmd;
         double vol;
-        while (read_uart)
+        while (true)
         {
             try
             {
                 mes = serialPort.ReadByte();
                 string message = Convert.ToChar(mes).ToString();
                 string stst = "reg";
-                //string message = serialPort.ReadLine();
-                //Console.WriteLine(Convert.ToByte(message[0]));
-                //Console.Write(message);
-                if (mes == 8)
+                if (mes == 9)
                 {
                     stst = serialPort.ReadLine();
                     WriteLog("Serial error: '" + stst + "'");
                     serial_error = 1;
                 }
-                if (mes == 7)
+                else if (mes == 7 || mes == 8)
                 {
-                    //Console.Write("Serial has acknowledged: ");
                     stst = serialPort.ReadLine();
-                    //Console.WriteLine("'" + stst + "'!");
                     WriteLog("Serial has acknowledged: '" + stst + "'!");
                     oracle_ready = true;
                 }
-                if (mes == 6)
+                else if (mes == 6)
                 {
                     stst = serialPort.ReadLine();
                     WriteLog("Serial responded: '" + stst + "'");
                 }
-                if (mes == '')
+                else if (mes == '')
                 {
-                    try
+                    cmd = (byte)serialPort.ReadChar();
+                    WriteLog("Command: " + cmd);
+                    if (cmd <= 3 && playback_device != null)
                     {
-                        cmd = (byte)serialPort.ReadChar();
-                        WriteLog("Command: " + cmd);
-                        if (cmd <= 3 && playback_device != null)
+                        vol = await playback_device.GetVolumeAsync();
+                        if (cmd == 1 && vol != 0)
                         {
-                            vol = await playback_device.GetVolumeAsync();
-                            if (cmd == 1 && vol != 0)
-                            {
-                                await playback_device.SetVolumeAsync(vol - GUI.volume_sens);
-                            }
-                            else if (cmd == 2 && vol != 100)
-                            {
-                                await playback_device.SetVolumeAsync(vol + GUI.volume_sens);
-                            }
-                            else if (cmd == 3)
-                            {
-                                await playback_device.ToggleMuteAsync();
-                            }
+                            await playback_device.SetVolumeAsync(vol - GUI.volume_sens);
                         }
-                        else if (cmd > 3 && gsmtcs != null)
+                        else if (cmd == 2 && vol != 100)
                         {
-                            if (cmd == 4)
-                            {
-                                await gsmtcs.TrySkipPreviousAsync();
-                            }
-                            else if (cmd == 5)
-                            {
-                                await gsmtcs.TryTogglePlayPauseAsync();
-                                WriteLog(gsmtcs.SourceAppUserModelId);
-                                //Console.WriteLine("Time is: " + gsmtcs.GetTimelineProperties().Position);
-                            }
-                            else if (cmd == 6)
-                            {
-                                await gsmtcs.TrySkipNextAsync();
-                            }
+                            await playback_device.SetVolumeAsync(vol + GUI.volume_sens);
                         }
-                        if (gsmtcs == null)
+                        else if (cmd == 3)
                         {
-                            WriteLog("GSMTCS is null :(");
+                            await playback_device.ToggleMuteAsync();
                         }
                     }
-                    catch (TimeoutException)
+                    else if (cmd > 3 && gsmtcs != null)
                     {
-
+                        if (cmd == 4)
+                        {
+                            await gsmtcs.TrySkipPreviousAsync();
+                        }
+                        else if (cmd == 5)
+                        {
+                            await gsmtcs.TryTogglePlayPauseAsync();
+                            WriteLog(gsmtcs.SourceAppUserModelId);
+                            //Console.WriteLine("Time is: " + gsmtcs.GetTimelineProperties().Position);
+                        }
+                        else if (cmd == 6)
+                        {
+                            await gsmtcs.TrySkipNextAsync();
+                        }
+                    }
+                    if (gsmtcs == null)
+                    {
+                        WriteLog("GSMTCS is null :(");
                     }
                 }
                 else
@@ -476,42 +425,62 @@ class DeviceHandler{
             }
             catch (TimeoutException)
             {
-                //Console.WriteLine("UART read timed out");
+
             }
             catch (OperationCanceledException)
             {
-                WriteLog("Device has been disconnected");
+                WriteLog("Device has been disconnected, please reconnect");
+                device_connected = false;
+                Thread.Sleep(4000);
             }
             catch (InvalidOperationException)
             {
-                Thread.Sleep(4000);
                 WriteLog("The port is closed");
+                device_connected = false;
+                Thread.Sleep(4000);
             }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                WriteLog(ex.ToString());
+            }
+            
         }
     }
-    private static void Write_Bytes(byte tag, uint length, byte[]? s, ushort width, ushort height, UInt32 dur = 0){
+    private static Task<int> Write_Bytes(byte tag, uint length, byte[]? s, ushort width, ushort height, UInt32 dur = 0)
+    {
+        if (!device_connected)
+            return Task.FromResult(0);
+        byte attempts = 0;
+        while (!oracle_ready)
+        {
+            if (attempts >= max_attempts)
+            {
+                return Task.FromResult(0);
+            }
+            attempts++;
+            Thread.Sleep(400);
+            WriteLog("Waiting for Oracle to be ready ");
+        }
         if (serial_error != 0)
         {
-            WriteLog("Error");
-            Thread.Sleep(1000);
             serial_error = 0;
-            //oracle_ready = true;
-            return;
+            Thread.Sleep(2000);
+            return Task.FromResult(0);
         }
+        oracle_ready = false;
         if (s == null)
         {
             s = Array.Empty<byte>();
             length = 0;
         }
-        oracle_ready = false;
         byte[] bytleng = BitConverter.GetBytes(length);
         byte[] bytwidth = BitConverter.GetBytes(width);
         byte[] bytheight = BitConverter.GetBytes(height);
         byte[] bytdur = BitConverter.GetBytes(dur);
         byte[] header = new byte[12]{tag, bytleng[0], bytleng[1], bytleng[2], bytwidth[0], bytwidth[1], bytheight[0], bytheight[1],
         bytdur[0], bytdur[1], bytdur[2], bytdur[3]};
-        byte[] bytes = (tag==3)? header.ToArray() : header.Concat(s.Take((int)length).ToArray()).ToArray();//what the fuck is this madness???
-        WriteLog("Total bytes to be sent: " + bytes.Count() +  " Tag: " + tag + " Length: " + length);
+        byte[] bytes = (tag == 3) ? header.ToArray() : header.Concat(s.Take((int)length).ToArray()).ToArray();//what the fuck is this madness???
+        WriteLog("Total bytes to be sent: " + bytes.Count() + " Tag: " + tag + " Length: " + length);
         if (tag == 2)
         {
             for (int i = 0; i < bytes.Count(); i++)//bytes.count
@@ -526,16 +495,16 @@ class DeviceHandler{
         catch (InvalidOperationException)
         {
             WriteLog("Device disconnected, InvalidOp");
+            device_connected = false;
         }
         catch (IOException)
         {
             WriteLog("Device disconnected, IOEx");
+            device_connected = false;
         }
+        return Task.FromResult(0);
     }
-    private static byte[]? ConvertTo565(byte[]? bytes){
-        if(bytes == null)
-            return null;
-
+    private static byte[] ConvertTo565(byte[] bytes){
         int byte_count = bytes.Count();
         byte[] rgb565 = new byte[byte_count*2/3];
         int i_565 = 0;

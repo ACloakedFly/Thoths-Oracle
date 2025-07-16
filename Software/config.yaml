@@ -1,0 +1,12 @@
+#Configuration file
+
+#Inline comments won't be saved
+VolumeSensitivity: 3
+PlaybackDevice: Default Device
+ComPort: COM3
+
+#Common speeds are 921600, 115200, 
+Speed: 9600
+MonitoredProgram:
+- MusicBee.exe
+- vlc.exe

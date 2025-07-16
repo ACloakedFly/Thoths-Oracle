@@ -16,6 +16,7 @@
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="13.8.0" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
 </Project>
