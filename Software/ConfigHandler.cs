@@ -126,6 +126,11 @@ class ConfigHandler
         DeviceHandler.WriteLog("Config changed");
         Thread.Sleep(500);
         DeviceHandler.config_changed = true;
+        if (GUI.program_changed)
+        {
+            GUI.program_changed = false;
+            GUI.program_config_changed = true;
+        }
     }
     private static void OnDeleted(object sender, FileSystemEventArgs e)
     {

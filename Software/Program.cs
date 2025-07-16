@@ -7,6 +7,15 @@ namespace Contexts
     // The class that handles the creation of the application windows
     class GUI : ApplicationContext
     {
+        static class VolumeKnob
+        {
+            public const UInt16 Low = 1;
+            public const UInt16 Medium = 5;
+            public const UInt16 High = 10;
+
+        }
+        public static bool program_config_changed = true;
+        public static bool program_changed = false;
         string port_selected = "";
         string path_a = "info.txt";
         public static Mutex playback_mutex = new();
@@ -41,11 +50,11 @@ namespace Contexts
         public static Thread media_thread = new(DeviceHandler.HandlerSetup);
 
         static DeviceHandler.Oracle_Configuration oracle_Configuration = new();
-        private static void Setup()
+        /*private static void Setup()
         {
             DeviceHandler.playback_device = new CoreAudioController().GetDefaultDevice(deviceType, role);
             dpd = DeviceHandler.playback_device;
-        }
+        }*/
 
         private GUI()
         {
@@ -57,19 +66,9 @@ namespace Contexts
             output = new ToolStripMenuItem("Output", null);
             ToolStripMenuItem exit = new ToolStripMenuItem("Exit", close_image, new EventHandler(OnClose));
 
-            increment_one = new ToolStripMenuItem("±1", null, new EventHandler(OnOne));
-            increment_one.BackColor = Color.AliceBlue;
-            volume_sense.DropDownItems.Add(increment_one);
-            increment_five = new ToolStripMenuItem("±5", null, new EventHandler(OnFive));
-            volume_sense.DropDownItems.Add(increment_five);
-            increment_five.BackColor = Color.AliceBlue;
-            increment_ten = new ToolStripMenuItem("±10", null, new EventHandler(OnTen));
-            volume_sense.DropDownItems.Add(increment_ten);
-            increment_ten.BackColor = Color.AliceBlue;
-
             default_audio_output = new ToolStripMenuItem("Default Device", null, new EventHandler(OnDefaultAudio));
             output.DropDownItems.Add(default_audio_output);
-            default_audio_output.Image = selected_img;
+            //default_audio_output.Image = selected_img;
 
             exit.MouseUp += new MouseEventHandler(OnClose);
             //
@@ -92,29 +91,72 @@ namespace Contexts
             volume_sense.DropDown.MouseEnter += new EventHandler(Vol_Sens_Enter);
             volume_sense.DropDown.MouseLeave += new EventHandler(Vol_Sens_Leave);
 
-            Setup();
-            SetSelections();
-            //InitializeComponent();
+            //Setup();
+            //SetSelections();
         }
         private void TopMenuExit(object? sender, EventArgs args)
         {
+            program_changed = true;
             ConfigHandler.SaveConfig(oracle_Configuration);
         }
 
         private void TopMenuClick(object? sender, EventArgs args)
         {
             oracle_Configuration = ConfigHandler.LoadConfig();
+            if (program_config_changed)
+            {
+                volume_sense.DropDownItems.Clear();
+                program_config_changed = false;
+                List<ushort>? ushorts = oracle_Configuration.VolumeSensitivityOptions;
+                if (ushorts != null)
+                {
+                    ToolStripItem tool;
+                    foreach (ushort sense in ushorts)
+                    {
+                        tool = volume_sense.DropDownItems.Add("±", null, OnVolumeChange);
+                        tool.Text += sense.ToString();
+                        tool.Tag = sense;
+                    }
+                }
+            }
+            foreach (ToolStripMenuItem strip in volume_sense.DropDownItems)
+            {
+                if (strip.Tag == null)
+                    continue;
+                if ((ushort)strip.Tag == oracle_Configuration.VolumeSensitivity)
+                {
+                    strip.Image = selected_img;
+                }
+                else
+                    strip.Image = null;
+            }
         }
+        private void OnVolumeChange(object? sender, EventArgs args)
+        {
+            if (sender == null)
+                return;
+            string? sender_text = sender.ToString();
+            if (sender_text == null)
+                return;
+            foreach (ToolStripItem tool in volume_sense.DropDownItems)
+            {
+                if (tool.Tag == null)
+                    continue;
+                if (sender_text.Equals(tool.Text))
+                {
+                    oracle_Configuration.VolumeSensitivity = (UInt16)tool.Tag;
+                    tool.Image = selected_img;
+                }
+                else
+                    tool.Image = null;
+            }
 
+        }
         private void MenuEnter(object? sender, EventArgs args)
         {
             if (notifyIcon.ContextMenuStrip == null)
                 return;
             notifyIcon.ContextMenuStrip.BringToFront();
-        }
-        private void SetConfig()
-        {
-            DeviceHandler.config_changed = true;
         }
 
         private void SetSelections()
@@ -158,9 +200,13 @@ namespace Contexts
             strings[i] = data;
             File.WriteAllLines(path_a, strings);
         }
-
-        private void OutputEnter(object? sender, EventArgs e){
+        private void OutputEnter(object? sender, EventArgs e)
+        {
+            if (sender == null)
+                return;
+            DeviceHandler.WriteLog("entered from " + sender.ToString());
             output.DropDown.AutoClose = false;
+            GetAudioDevices();
         }
         private void OutputLeave(object? sender, EventArgs e){
             output.DropDown.AutoClose = true;
@@ -186,31 +232,10 @@ namespace Contexts
                 i++;
            }
         }
-        private void OnOne(object? sender, EventArgs e){
-           volume_sens = 1;
-           increment_one.Image = selected_img;
-           increment_five.Image = null;
-           increment_ten.Image = null;
-           ChangeSelection(0, 1.ToString());
-        }
-        private void OnFive(object? sender, EventArgs e){
-           volume_sens = 5;
-           increment_one.Image = null;
-           increment_five.Image = selected_img;
-           increment_ten.Image = null;
-           ChangeSelection(0, 5.ToString());
-        }
-        private void OnTen(object? sender, EventArgs e){
-           volume_sens = 10;
-           increment_one.Image = null;
-           increment_five.Image = null;
-           increment_ten.Image = selected_img;
-           ChangeSelection(0, 10.ToString());
-        }
 
         private void OnPort(object? sender, EventArgs e){
             SetPort();
-            SetDevice(false);
+            //SetDevice(false);
         }
 
         private void SetPort(){
@@ -227,20 +252,22 @@ namespace Contexts
         private async void GetAudioDevices()
         {
             cad = null;
-            cad = await new CoreAudioController().GetPlaybackDevicesAsync();
+            cad = await new CoreAudioController().GetPlaybackDevicesAsync(DeviceState.Active);
             output.DropDownItems.Clear();
             output.DropDownItems.Add(default_audio_output);
-            if (selected_device == 0)
-                output.DropDownItems[0].Image = selected_img;
-            int i = 1;
             foreach (CoreAudioDevice c in cad)
             {
                 output.DropDownItems.Add(new ToolStripMenuItem(c.Name, null, new EventHandler(OnSetAudioDevice)));
-                if (i == selected_device)
-                    output.DropDownItems[i].Image = selected_img;
-                i++;
             }
-
+            foreach (ToolStripItem tool in output.DropDownItems)
+            {
+                if (tool.Text.Equals(oracle_Configuration.PlaybackDevice))
+                {
+                    tool.Image = selected_img;
+                    break;
+                }
+                
+            }
         }
         private void OnSetAudioDevice(object? sender, EventArgs args)
         {
@@ -317,7 +344,7 @@ namespace Contexts
         //public static async Task Main(string[] args)
         public static void Main(string[] args)
         {
-            Setup();
+            //Setup();
             GUI context = new();
             media_thread.Start();
             Application.Run(context);

@@ -66,6 +66,7 @@ class DeviceHandler{
     public class Oracle_Configuration
     {
         public ushort VolumeSensitivity { get; set; }
+        public List<UInt16>? VolumeSensitivityOptions { get; set; }
         public string? PlaybackDevice { get; set; }
         public string? ComPort { get; set; }
         public UInt32 Speed { get; set; }
@@ -171,10 +172,10 @@ class DeviceHandler{
         if (config.PlaybackDevice != null) {
             WriteLog("Looking for " + config.PlaybackDevice);
             CoreAudioController coreAudioController = new CoreAudioController(); 
-            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.FullName == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
         }
         if(playback_device != null)
-            WriteLog("Found device: " + playback_device.FullName);
+            WriteLog("Found device: " + playback_device.Name);
         //ConfigHandler.SaveConfig(ConfigHandler.default_path, config);
         serial_setup();
     }
@@ -417,11 +418,11 @@ class DeviceHandler{
                         vol = await playback_device.GetVolumeAsync();
                         if (cmd == InputCodes.VolumeDown && vol != 0)
                         {
-                            await playback_device.SetVolumeAsync(vol - GUI.volume_sens);
+                            await playback_device.SetVolumeAsync(vol - config.VolumeSensitivity);
                         }
                         else if (cmd == InputCodes.VolumeUp && vol != 100)
                         {
-                            await playback_device.SetVolumeAsync(vol + GUI.volume_sens);
+                            await playback_device.SetVolumeAsync(vol + config.VolumeSensitivity);
                         }
                         else if (cmd == InputCodes.Mute)
                         {
