@@ -83,7 +83,8 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define CMD_TAG         5
 #define INFO_TAG        6
 #define STATUS_TAG      7
-#define ERROR_TAG       8
+#define FINISHED_TAG    8
+#define ERROR_TAG       9
 
 //Display
 #define PIN_NUM_SCLK        11

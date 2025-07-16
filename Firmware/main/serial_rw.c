@@ -118,7 +118,7 @@ static void frame_end(char *mes){
     char tg[31];
     //Let host know that we finished, and where from. Location is useful for debugging
     sprintf(tg, "Finished from: %s", mes);
-    serial_jtag_write(STATUS_TAG, tg, 31, portDelay);
+    serial_jtag_write(FINISHED_TAG, tg, 31, portDelay);
 }
 
 //Uh-oh. dump all the data received and wait for quiet period of 250ms to know host is done transmitting
