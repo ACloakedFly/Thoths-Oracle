@@ -9,22 +9,50 @@ class ConfigHandler
     private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new DeviceHandler.Oracle_Configuration
     {
         ComPort = "COM3",
+        WriteTimeout = 5000,
+        ReadTimeout = 1000,
+        ConnectionWait = 500,
+        ReConnectionWait = 2000,
+        MediaCheck = 500,
+        ConfigCheck = 5000,
+        OracleReadyWait = 400,
+        DisconnectedWait = 4000,
+        VolumeSensitivityOptions = new() {1, 5, 10},
         VolumeSensitivity = 5,
         PlaybackDevice = "Default Device",
         Speed = 921600,
         MonitoredProgram = new(),
     };
     const string default_config = @"
-    #Configuration file
+#Configuration file
 
-    #Inline comments won't be saved
-    VolumeSensitivity: 5
-    PlaybackDevice: Default Device
-    ComPort: COM3
+#Port can be found in Device Manager. Look for 
+ComPort: COM3
+#Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu too
+VolumeSensitivity: 5
+VolumeSensitivityOptions:
+- 1
+- 5
+- 10
+PlaybackDevice: TOSHIBA-TV
 
-    #But this is cool
-    Speed: 921600
-    MonitoredProgram:
+MonitoredProgram:
+- MusicBee.exe
+- vlc.exe
+
+#Nitty gritty tuning. These values should be good for most circumstances
+#Speed is unused
+Speed: 9600
+WriteTimeout: 5000
+ReadTimeout: 1000
+ConnectionWait: 500
+ReConnectionWait: 2000
+MediaCheck: 500
+ConfigCheck: 5000
+OracleReadyWait: 400
+DisconnectedWait: 4000
+
+LogContinuous: false
     ";
     private static void ExceptionHandler(Exception exception)
     {
