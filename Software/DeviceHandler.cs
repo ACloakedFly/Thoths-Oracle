@@ -8,6 +8,27 @@ using Contexts;
 using Windows.Media;
 using System.Diagnostics;
 class DeviceHandler{
+    private static class ComCodes
+    {
+        public const byte Image = 1;
+        public const byte Text = 2;
+        public const byte SystemMsg = 3;
+        public const byte DurPos = 4;
+        public const byte Input = 5;
+        public const byte Status = 6;
+        public const byte Idling = 7;
+        public const byte Finished = 8;
+        public const byte Error = 9;
+    }
+    private static class InputCodes
+    {
+        public const byte VolumeDown = 1; 
+        public const byte VolumeUp = 2; 
+        public const byte Mute = 3; 
+        public const byte PreviousTrack = 4; 
+        public const byte PlayPause = 5; 
+        public const byte NextTrack = 6; 
+    }
     public static CoreAudioDevice? playback_device;
     static bool updating_media = false;
     static bool queued_media = false;
@@ -196,7 +217,7 @@ class DeviceHandler{
         byte byt = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
         byte[] bytes = BitConverter.GetBytes(song_position).ToArray().Concat(BitConverter.GetBytes(song_duration).ToArray()).ToArray();
         WriteLog("We playing? " + byt + " we reseting? " + reset_pos);
-        Write_Bytes(4, 8, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
+        Write_Bytes(ComCodes.DurPos, 8, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
         //don't reset position when (duration == 0 and reset pos == 0)
         reset_pos = 0;
     }
@@ -240,8 +261,8 @@ class DeviceHandler{
                 thumb_stream = queued_thumb_stream;
             current_media = captured_media;
         }
-        await Write_Bytes(3, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
-        await Write_Bytes(2, (uint)System.Text.Encoding.UTF8.GetByteCount(current_media), System.Text.Encoding.UTF8.GetBytes(current_media), 0, 0);
+        await Write_Bytes(ComCodes.SystemMsg, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+        await Write_Bytes(ComCodes.Text, (uint)System.Text.Encoding.UTF8.GetByteCount(current_media), System.Text.Encoding.UTF8.GetBytes(current_media), 0, 0);
         await Get_Thumbnail(thumb_stream);
         await Resize_Thumbnail();
         updating_media = false;
@@ -283,7 +304,7 @@ class DeviceHandler{
         if (bytes == null)
             return 0;
         bytes = ConvertTo565(bytes);
-        await Write_Bytes(1, (uint)bytes.Length, bytes, (ushort)img.Width, (ushort)img.Height);
+        await Write_Bytes(ComCodes.Image, (uint)bytes.Length, bytes, (ushort)img.Width, (ushort)img.Height);
         return 0;
     }
     private static async Task Get_Thumbnail(IRandomAccessStreamReference thumby){
@@ -331,7 +352,7 @@ class DeviceHandler{
                 Thread.Sleep(400);
                 WriteLog("Port opened, waiting for device to be ready ");
             }
-            Write_Bytes(3, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+            Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
             if (gsmtcs != null)
                 device_reconnected = true;
         }
@@ -359,56 +380,56 @@ class DeviceHandler{
                 mes = serialPort.ReadByte();
                 string message = Convert.ToChar(mes).ToString();
                 string stst = "reg";
-                if (mes == 9)
+                if (mes == ComCodes.Error)
                 {
                     stst = serialPort.ReadLine();
                     WriteLog("Serial error: '" + stst + "'");
                     serial_error = 1;
                 }
-                else if (mes == 7 || mes == 8)
+                else if (mes == ComCodes.Idling || mes == ComCodes.Finished)
                 {
                     stst = serialPort.ReadLine();
                     WriteLog("Serial has acknowledged: '" + stst + "'!");
                     oracle_ready = true;
                 }
-                else if (mes == 6)
+                else if (mes == ComCodes.Status)
                 {
                     stst = serialPort.ReadLine();
                     WriteLog("Serial responded: '" + stst + "'");
                 }
-                else if (mes == '')
+                else if (mes == ComCodes.Input)
                 {
                     cmd = (byte)serialPort.ReadChar();
                     WriteLog("Command: " + cmd);
-                    if (cmd <= 3 && playback_device != null)
+                    if (cmd <= InputCodes.Mute && playback_device != null)
                     {
                         vol = await playback_device.GetVolumeAsync();
-                        if (cmd == 1 && vol != 0)
+                        if (cmd == InputCodes.VolumeDown && vol != 0)
                         {
                             await playback_device.SetVolumeAsync(vol - GUI.volume_sens);
                         }
-                        else if (cmd == 2 && vol != 100)
+                        else if (cmd == InputCodes.VolumeUp && vol != 100)
                         {
                             await playback_device.SetVolumeAsync(vol + GUI.volume_sens);
                         }
-                        else if (cmd == 3)
+                        else if (cmd == InputCodes.Mute)
                         {
                             await playback_device.ToggleMuteAsync();
                         }
                     }
-                    else if (cmd > 3 && gsmtcs != null)
+                    else if (cmd > InputCodes.Mute && gsmtcs != null)
                     {
-                        if (cmd == 4)
+                        if (cmd == InputCodes.PreviousTrack)
                         {
                             await gsmtcs.TrySkipPreviousAsync();
                         }
-                        else if (cmd == 5)
+                        else if (cmd == InputCodes.PlayPause)
                         {
                             await gsmtcs.TryTogglePlayPauseAsync();
                             WriteLog(gsmtcs.SourceAppUserModelId);
                             //Console.WriteLine("Time is: " + gsmtcs.GetTimelineProperties().Position);
                         }
-                        else if (cmd == 6)
+                        else if (cmd == InputCodes.NextTrack)
                         {
                             await gsmtcs.TrySkipNextAsync();
                         }
