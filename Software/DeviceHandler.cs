@@ -4,6 +4,7 @@ using Windows.Storage.Streams;
 using System.IO.Ports;
 using ImageMagick;
 using AudioSwitcher.AudioApi.CoreAudio;
+using AudioSwitcher.AudioApi;
 using Contexts;
 using Windows.Media;
 using System.Diagnostics;
@@ -167,6 +168,13 @@ class DeviceHandler{
     {
         config = new Oracle_Configuration();
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
+        if (config.PlaybackDevice != null) {
+            WriteLog("Looking for " + config.PlaybackDevice);
+            CoreAudioController coreAudioController = new CoreAudioController(); 
+            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.FullName == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+        }
+        if(playback_device != null)
+            WriteLog("Found device: " + playback_device.FullName);
         //ConfigHandler.SaveConfig(ConfigHandler.default_path, config);
         serial_setup();
     }

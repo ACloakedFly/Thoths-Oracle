@@ -45,7 +45,7 @@ class ConfigHandler
         }
     }
 
-    public static DeviceHandler.Oracle_Configuration LoadConfig(string configurationFile)
+    public static DeviceHandler.Oracle_Configuration LoadConfig(string configurationFile = default_path)
     {
         try
         {
@@ -65,7 +65,7 @@ class ConfigHandler
         }
         return default_oracle_config;
     }
-    public static void SaveConfig(string configurationFile, DeviceHandler.Oracle_Configuration config)
+    public static void SaveConfig(DeviceHandler.Oracle_Configuration config, string configurationFile = default_path)
     {
         try
         {

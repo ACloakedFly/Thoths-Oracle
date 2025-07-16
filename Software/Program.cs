@@ -9,6 +9,7 @@ namespace Contexts
     {
         string port_selected = "";
         string path_a = "info.txt";
+        public static Mutex playback_mutex = new();
         private NotifyIcon notifyIcon;
         private ContextMenuStrip contextMenu = new ContextMenuStrip();
         ToolStripMenuItem port = new ToolStripMenuItem();
@@ -38,7 +39,10 @@ namespace Contexts
         public static Thread read_thread = new(DeviceHandler.Read);
         public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
         public static Thread media_thread = new(DeviceHandler.HandlerSetup);
-        private static void Setup(){
+
+        static DeviceHandler.Oracle_Configuration oracle_Configuration = new();
+        private static void Setup()
+        {
             DeviceHandler.playback_device = new CoreAudioController().GetDefaultDevice(deviceType, role);
             dpd = DeviceHandler.playback_device;
         }
@@ -54,11 +58,14 @@ namespace Contexts
             ToolStripMenuItem exit = new ToolStripMenuItem("Exit", close_image, new EventHandler(OnClose));
 
             increment_one = new ToolStripMenuItem("±1", null, new EventHandler(OnOne));
+            increment_one.BackColor = Color.AliceBlue;
             volume_sense.DropDownItems.Add(increment_one);
             increment_five = new ToolStripMenuItem("±5", null, new EventHandler(OnFive));
             volume_sense.DropDownItems.Add(increment_five);
+            increment_five.BackColor = Color.AliceBlue;
             increment_ten = new ToolStripMenuItem("±10", null, new EventHandler(OnTen));
             volume_sense.DropDownItems.Add(increment_ten);
+            increment_ten.BackColor = Color.AliceBlue;
 
             default_audio_output = new ToolStripMenuItem("Default Device", null, new EventHandler(OnDefaultAudio));
             output.DropDownItems.Add(default_audio_output);
@@ -67,14 +74,19 @@ namespace Contexts
             exit.MouseUp += new MouseEventHandler(OnClose);
             //
             contextMenu.Items.AddRange(new ToolStripItem[] { port, volume_sense, output, exit });
+            volume_sense.BackColor = Color.AliceBlue; 
+            output.BackColor = Color.AliceBlue; 
+            contextMenu.BackColor = Color.AliceBlue;
             notifyIcon = new NotifyIcon();
             notifyIcon.Icon = SystemIcons.Shield;
             notifyIcon.Visible = true;
             notifyIcon.Text = "My icon!";
             notifyIcon.ContextMenuStrip = contextMenu;
 
-            notifyIcon.MouseClick += new MouseEventHandler(OnPort);
-
+            notifyIcon.MouseClick += new MouseEventHandler(TopMenuClick);
+            notifyIcon.ContextMenuStrip.Closed += new ToolStripDropDownClosedEventHandler(TopMenuExit);
+            notifyIcon.ContextMenuStrip.MouseEnter += new EventHandler(MenuEnter);
+            port.DropDown.MouseEnter += new EventHandler(OnPort);
             output.DropDown.MouseEnter += new EventHandler(OutputEnter);
             output.DropDown.MouseLeave += new EventHandler(OutputLeave);
             volume_sense.DropDown.MouseEnter += new EventHandler(Vol_Sens_Enter);
@@ -84,32 +96,57 @@ namespace Contexts
             SetSelections();
             //InitializeComponent();
         }
+        private void TopMenuExit(object? sender, EventArgs args)
+        {
+            ConfigHandler.SaveConfig(oracle_Configuration);
+        }
 
-        private void SetSelections(){
+        private void TopMenuClick(object? sender, EventArgs args)
+        {
+            oracle_Configuration = ConfigHandler.LoadConfig();
+        }
+
+        private void MenuEnter(object? sender, EventArgs args)
+        {
+            if (notifyIcon.ContextMenuStrip == null)
+                return;
+            notifyIcon.ContextMenuStrip.BringToFront();
+        }
+        private void SetConfig()
+        {
+            DeviceHandler.config_changed = true;
+        }
+
+        private void SetSelections()
+        {
             string[] data;
-            try{
+            try
+            {
                 data = File.ReadAllLines(path_a);
             }
-            catch(FileNotFoundException){
-                string[] default_data = {"5", "Default Device", "COM3"};
+            catch (FileNotFoundException)
+            {
+                string[] default_data = { "5", "Default Device", "COM3" };
                 File.WriteAllLines(path_a, default_data);
                 data = default_data;
             }
             bool vol_parse;
-            if(data.Length >= 3){
+            if (data.Length >= 3)
+            {
                 playback_device_s = data[1];
                 port_selected = data[2];
                 vol_parse = int.TryParse(data[0], out volume_sens);
-                if(!vol_parse)
+                if (!vol_parse)
                     volume_sens = 5;
-                if(volume_sens == 1)
+                if (volume_sens == 1)
                     increment_one.Image = selected_img;
-                else if(volume_sens == 5)
+                else if (volume_sens == 5)
                     increment_five.Image = selected_img;
-                else if(volume_sens == 10)
+                else if (volume_sens == 10)
                     increment_ten.Image = selected_img;
             }
-            if(playback_device_s != "Default Device"){
+            if (playback_device_s != "Default Device")
+            {
                 default_audio_output.Image = null;
                 SetDevice(true);
             }
@@ -187,24 +224,53 @@ namespace Contexts
                     output.DropDownItems[i].Image = selected_img;
             }
         }
+        private async void GetAudioDevices()
+        {
+            cad = null;
+            cad = await new CoreAudioController().GetPlaybackDevicesAsync();
+            output.DropDownItems.Clear();
+            output.DropDownItems.Add(default_audio_output);
+            if (selected_device == 0)
+                output.DropDownItems[0].Image = selected_img;
+            int i = 1;
+            foreach (CoreAudioDevice c in cad)
+            {
+                output.DropDownItems.Add(new ToolStripMenuItem(c.Name, null, new EventHandler(OnSetAudioDevice)));
+                if (i == selected_device)
+                    output.DropDownItems[i].Image = selected_img;
+                i++;
+            }
 
-        private void SetDevice(bool name_check){
+        }
+        private void OnSetAudioDevice(object? sender, EventArgs args)
+        {
+            if (sender == null || cad == null || !cad.Any() || dpd == null)
+                return;
+            oracle_Configuration.PlaybackDevice = sender.ToString();
+        }
+
+        private void SetDevice(bool name_check)
+        {
             cad = null;
             cad = new CoreAudioController().GetPlaybackDevices(DeviceState.Active);
-            
+
             int output_count = output.DropDownItems.Count;
             output.DropDownItems.Clear();
             output.DropDownItems.Add(default_audio_output);
             int i = 0;
-            foreach(CoreAudioDevice c in cad){
+            foreach (CoreAudioDevice c in cad)
+            {
                 i++;
                 output.DropDownItems.Add(new ToolStripMenuItem(c.Name, null, new EventHandler(OnOutputSelected)));
-                if(!name_check){
-                    if(i == selected_device)
+                if (!name_check)
+                {
+                    if (i == selected_device)
                         output.DropDownItems[i].Image = selected_img;
                 }
-                else{
-                    if(c.Name.Equals(playback_device_s)){}{
+                else
+                {
+                    if (c.Name.Equals(playback_device_s)) { }
+                    {
                         selected_device = i;
                     }
                 }
@@ -240,7 +306,10 @@ namespace Contexts
         private void OnClose(object? sender, EventArgs e){
             continue_config = false;
             continue_read = false;
-            continue_media = false;           
+            continue_media = false;
+            notifyIcon.Visible = false;
+            notifyIcon.Dispose();
+            Dispose();
             ExitThread();
         }
 

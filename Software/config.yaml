@@ -2,7 +2,7 @@
 
 #Inline comments won't be saved
 VolumeSensitivity: 3
-PlaybackDevice: Default Device
+PlaybackDevice: Speakers (Realtek(R) Audio)
 ComPort: COM3
 
 #Common speeds are 921600, 115200, 

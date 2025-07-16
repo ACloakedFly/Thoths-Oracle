@@ -1,4 +1,4 @@
-5
-Default Device
+1
+TOSHIBA-TV
 COM3
 MusicBee.exe
