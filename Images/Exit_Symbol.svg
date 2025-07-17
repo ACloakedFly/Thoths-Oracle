@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3.2 (091e20e, 2023-11-25, custom)"
+   sodipodi:docname="Exit_Symbol.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="1.5340488"
+     inkscape:cx="431.53777"
+     inkscape:cy="456.63475"
+     inkscape:window-width="1122"
+     inkscape:window-height="1009"
+     inkscape:window-x="761"
+     inkscape:window-y="38"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="g4">
+      <path
+         style="fill:none;stroke:#0055b1;stroke-width:8;stroke-linecap:square;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+         d="M 142.98308,169.42901 76.819779,95.67687 77.345687,135.52682"
+         id="path1"
+         sodipodi:nodetypes="ccc"
+         inkscape:export-filename="..\Software\Icons_Images\Exit_symbol.png"
+         inkscape:export-xdpi="72.244118"
+         inkscape:export-ydpi="72.244118" />
+      <path
+         style="fill:none;stroke:#673d10;stroke-width:8;stroke-linecap:square;stroke-dasharray:8, 23.99999812;stroke-dashoffset:16;stroke-opacity:1"
+         d="M 142.87813,169.39998 76.714834,95.647841 77.240744,135.49779"
+         id="path1-7"
+         sodipodi:nodetypes="ccc"
+         inkscape:export-filename="..\Software\Icons_Images\Exit_symbol.png"
+         inkscape:export-xdpi="4.7287436"
+         inkscape:export-ydpi="4.7287436"
+         inkscape:label="Primary" />
+    </g>
+    <path
+       style="fill:none;fill-opacity:1;stroke:#0055b1;stroke-width:8;stroke-linecap:square;stroke-miterlimit:7;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:normal"
+       d="m 77.979881,169.73161 c 0,0 40.851909,-58.97619 57.191909,-59.34275 7.02872,-0.15768 8.34262,-5.03858 8.45543,-10.978277 0.13043,-6.867468 -13.52922,-12.450865 -16.94403,-4.64559 -3.41481,7.805277 2.18762,6.341357 -7.8129,13.292927"
+       id="path4-3"
+       sodipodi:nodetypes="csssc" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#673d10;stroke-width:8;stroke-linecap:round;stroke-dasharray:8, 24.0001;stroke-dashoffset:16.0001;stroke-opacity:1"
+       d="m 77.845619,169.55551 c 0,0 41.024381,-58.80372 57.364381,-59.17028 7.02872,-0.15768 8.34262,-5.03858 8.45543,-10.978275 0.13043,-6.867468 -13.52922,-12.450865 -16.94403,-4.64559 -3.41481,7.805275 2.18762,6.341355 -7.8129,13.292925"
+       id="path4"
+       sodipodi:nodetypes="csssc"
+       inkscape:label="Primary" />
+  </g>
+</svg>

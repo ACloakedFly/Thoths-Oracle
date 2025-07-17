@@ -181,7 +181,7 @@ class DeviceHandler{
             logs = string.Concat(log_dir, logs, DateTime.Now.Day + "_" + DateTime.Now.Month + "_" + DateTime.Now.Year + "_t_" + DateTime.Now.Hour + "_" + DateTime.Now.Minute + ".txt");
         else
         {
-            logs = string.Concat(log_dir, logs);
+            logs = string.Concat(log_dir, logs, ".txt");
         }
         File.WriteAllText(logs, "\nLog Start:\n");
     }

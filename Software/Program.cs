@@ -1,22 +1,13 @@
 using System.IO.Ports;
 using AudioSwitcher.AudioApi.CoreAudio;
 using AudioSwitcher.AudioApi;
+using System.ComponentModel;
 
 namespace Contexts
 {
     // The class that handles the creation of the application windows
     class GUI : ApplicationContext
     {
-        static class VolumeKnob
-        {
-            public const UInt16 Low = 1;
-            public const UInt16 Medium = 5;
-            public const UInt16 High = 10;
-
-        }
-        public static bool program_config_changed = true;
-        public static bool program_changed = false;
-        public static Mutex playback_mutex = new();
         private NotifyIcon notifyIcon;
         private ContextMenuStrip contextMenu = new ContextMenuStrip();
         ToolStripMenuItem port = new ToolStripMenuItem();
@@ -36,45 +27,56 @@ namespace Contexts
         public static Thread media_thread = new(DeviceHandler.HandlerSetup);
 
         static DeviceHandler.Oracle_Configuration oracle_Configuration = new();
+        static DeviceHandler.Oracle_Configuration oracle_Config_Old = new();
 
         private GUI()
         {
-            //string path_icon = "chevron_up.ico"; 
-            //Image image = Image.FromFile(path_icon);
-            Image image = SystemIcons.Error.ToBitmap();
+            string icon_paths = "Icons_Images\\";
+            string path_icon = icon_paths + "huge.png";
+            Image logo_img = Image.FromFile(icon_paths + "small.png");
+            selected_img = Image.FromFile(icon_paths + "Selected.png");
+            //Image image = SystemIcons.Error.ToBitmap();
             port = new ToolStripMenuItem("Port", null);
             volume_sense = new ToolStripMenuItem("Volume Knob Sensitivity", null);
-            output = new ToolStripMenuItem("Output", null);
-            ToolStripMenuItem exit = new ToolStripMenuItem("Exit", close_image, new EventHandler(OnClose));
+            output = new ToolStripMenuItem("Playback Devices", null);
+            ToolStripMenuItem exit = new("Exit", Bitmap.FromFile(icon_paths + "Exit_symbol.png"), new EventHandler(OnClose));
 
             default_audio_output = new ToolStripMenuItem("Default Device", null, new EventHandler(OnSetAudioDevice));
             output.DropDownItems.Add(default_audio_output);
-            //default_audio_output.Image = selected_img;
+            default_audio_output.Image = selected_img;
 
+            ToolStripMenuItem title = new("Thoth's Oracle", null);
+            title.Image = logo_img;
+            title.Font = new Font(title.Font, FontStyle.Bold);
+
+            Bitmap logo_icon = (Bitmap)Bitmap.FromFile(path_icon);
+            IntPtr logo_ptr = logo_icon.GetHicon();
             exit.MouseUp += new MouseEventHandler(OnClose);
-            //
-            contextMenu.Items.AddRange(new ToolStripItem[] { port, volume_sense, output, exit });
-            volume_sense.BackColor = Color.AliceBlue; 
-            output.BackColor = Color.AliceBlue; 
-            contextMenu.BackColor = Color.AliceBlue;
-            notifyIcon = new NotifyIcon();
-            notifyIcon.Icon = SystemIcons.Shield;
-            notifyIcon.Visible = true;
-            notifyIcon.Text = "My icon!";
-            notifyIcon.ContextMenuStrip = contextMenu;
+            contextMenu.Items.AddRange(new ToolStripItem[] { title, port, volume_sense, output, exit });
+            contextMenu.BackColor = Color.Beige;
+            volume_sense.DropDown.BackColor = Color.Beige;
+            port.DropDown.BackColor = Color.Beige;
+            output.DropDown.BackColor = Color.Beige;
+            notifyIcon = new NotifyIcon
+            {
+                Icon = Icon.FromHandle(logo_ptr),
+                Visible = true,
+                Text = "Thoth's Oracle",
+                ContextMenuStrip = contextMenu
+            };
 
             notifyIcon.MouseClick += new MouseEventHandler(TopMenuClick);
             notifyIcon.ContextMenuStrip.Closed += new ToolStripDropDownClosedEventHandler(TopMenuExit);
             notifyIcon.ContextMenuStrip.MouseEnter += new EventHandler(MenuEnter);
-            //port.DropDown.MouseEnter += new EventHandler(OnPort);
-            output.DropDown.MouseEnter += new EventHandler(OutputEnter);
-            output.DropDown.MouseLeave += new EventHandler(OutputLeave);
-            volume_sense.DropDown.MouseEnter += new EventHandler(Vol_Sens_Enter);
-            volume_sense.DropDown.MouseLeave += new EventHandler(Vol_Sens_Leave);
+            output.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
+            output.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
+            volume_sense.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
+            volume_sense.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
+            port.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
+            port.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
         }
         private void TopMenuExit(object? sender, EventArgs args)
         {
-            program_changed = true;
             ConfigHandler.SaveConfig(oracle_Configuration);
         }
 
@@ -82,53 +84,37 @@ namespace Contexts
         {
             oracle_Configuration = ConfigHandler.LoadConfig();
             GetPorts();
-            if (program_config_changed)
+            oracle_Config_Old.VolumeSensitivityOptions ??= new List<ushort> { };
+            if (oracle_Configuration.VolumeSensitivityOptions == null || oracle_Config_Old.VolumeSensitivityOptions == null)
+                return;
+            if (Enumerable.SequenceEqual(oracle_Config_Old.VolumeSensitivityOptions, oracle_Configuration.VolumeSensitivityOptions))
+                return;
+
+            volume_sense.DropDownItems.Clear();
+            List<ushort>? ushorts = oracle_Configuration.VolumeSensitivityOptions;
+            if (ushorts != null)
             {
-                volume_sense.DropDownItems.Clear();
-                program_config_changed = false;
-                List<ushort>? ushorts = oracle_Configuration.VolumeSensitivityOptions;
-                if (ushorts != null)
+                ToolStripItem tool;
+                foreach (ushort sense in ushorts)
                 {
-                    ToolStripItem tool;
-                    foreach (ushort sense in ushorts)
-                    {
-                        tool = volume_sense.DropDownItems.Add("±", null, OnVolumeChange);
-                        tool.Text += sense.ToString();
-                        tool.Tag = sense;
-                    }
+                    tool = volume_sense.DropDownItems.Add("±", null, OnVolumeChange);
+                    tool.Text += sense.ToString();
+                    tool.Tag = sense;
+                    if (sense == oracle_Configuration.VolumeSensitivity)
+                        tool.Image = selected_img;
                 }
             }
-            foreach (ToolStripMenuItem strip in volume_sense.DropDownItems)
-            {
-                if (strip.Tag == null)
-                    continue;
-                if ((ushort)strip.Tag == oracle_Configuration.VolumeSensitivity)
-                {
-                    strip.Image = selected_img;
-                }
-                else
-                    strip.Image = null;
-            }
+            oracle_Config_Old.VolumeSensitivityOptions = oracle_Configuration.VolumeSensitivityOptions;
         }
         private void OnVolumeChange(object? sender, EventArgs args)
         {
             if (sender == null)
                 return;
-            string? sender_text = sender.ToString();
-            if (sender_text == null)
+            ToolStripItem sender_item = (ToolStripItem)sender;
+            if (sender_item.Tag == null)
                 return;
-            foreach (ToolStripItem tool in volume_sense.DropDownItems)
-            {
-                if (tool.Tag == null)
-                    continue;
-                if (sender_text.Equals(tool.Text))
-                {
-                    oracle_Configuration.VolumeSensitivity = (UInt16)tool.Tag;
-                    tool.Image = selected_img;
-                }
-                else
-                    tool.Image = null;
-            }
+            oracle_Configuration.VolumeSensitivity = (ushort)sender_item.Tag;
+            ResetList(sender);
 
         }
         private void MenuEnter(object? sender, EventArgs args)
@@ -136,34 +122,41 @@ namespace Contexts
             if (notifyIcon.ContextMenuStrip == null)
                 return;
             notifyIcon.ContextMenuStrip.BringToFront();
+            notifyIcon.ContextMenuStrip.AutoClose = false;
         }
-        private void OutputEnter(object? sender, EventArgs e)
+        private void OnAutoCloseEnable(object? sender, EventArgs args)
         {
             if (sender == null)
                 return;
-            DeviceHandler.WriteLog("entered from " + sender.ToString());
-            output.DropDown.AutoClose = false;
-            GetAudioDevices();
+            ToolStripDropDownMenu dropDown = (ToolStripDropDownMenu)sender;
+            dropDown.AutoClose = true;
         }
-        private void OutputLeave(object? sender, EventArgs e){
-            output.DropDown.AutoClose = true;
+        private void OnAutoCloseDisable(object? sender, EventArgs args)
+        {
+            if (sender == null)
+                return;
+            ToolStripDropDownMenu dropDown = (ToolStripDropDownMenu)sender;
+            dropDown.AutoClose = false;
+            if (dropDown.OwnerItem.Text.Equals("Playback Devices"))
+                GetAudioDevices();
         }
-        private void Vol_Sens_Enter(object? sender, EventArgs e){
-            volume_sense.DropDown.AutoClose = false;
-        }
-        private void Vol_Sens_Leave(object? sender, EventArgs e){
-            volume_sense.DropDown.AutoClose = true;
-        }
-
-        private void GetPorts(){
-            string[] ports_s = SerialPort.GetPortNames();
-            port.DropDownItems.Clear();
-            int i = 0;
-            foreach(string p in ports_s){
-                //ports_found += p;
-                port.DropDownItems.Add(new ToolStripMenuItem(p, close_image, new EventHandler(OnPortSelected)));
-                if(p.Equals(oracle_Configuration.ComPort))
-                    port.DropDownItems[i].Image = selected_img;
+        private void GetPorts() {
+            try
+            {
+                string[] ports_s = SerialPort.GetPortNames();
+                port.DropDownItems.Clear();
+                int i = 0;
+                foreach (string p in ports_s)
+                {
+                    port.DropDownItems.Add(new ToolStripMenuItem(p, close_image, new EventHandler(OnSetPort)));
+                    if (p.Equals(oracle_Configuration.ComPort))
+                        port.DropDownItems[i].Image = selected_img;
+                    i++;
+                }
+            }
+            catch (Win32Exception ex)
+            {
+                DeviceHandler.WriteLog(ex.ToString());
             }
         }
         private async void GetAudioDevices()
@@ -176,46 +169,44 @@ namespace Contexts
                 if (index < output.DropDownItems.Count)
                     continue;
                 output.DropDownItems.Add(new ToolStripMenuItem(c.Name, null, new EventHandler(OnSetAudioDevice)));
-                index++;
-            }
-            foreach (ToolStripItem tool in output.DropDownItems)
-            {
-                if (tool.Text.Equals(oracle_Configuration.PlaybackDevice))
+                if (c.Name.Equals(oracle_Configuration.PlaybackDevice))
                 {
-                    tool.Image = selected_img;
+                    output.DropDownItems[index].Image = selected_img;
+                    default_audio_output.Image = null;
                 }
-                else
-                    tool.Image = null;
+                index++;
             }
         }
         private void OnSetAudioDevice(object? sender, EventArgs args)
         {
             if (sender == null || cad == null || !cad.Any())
                 return;
-            foreach (ToolStripItem toool in output.DropDownItems)
-                toool.Image = null;
             oracle_Configuration.PlaybackDevice = sender.ToString();
-            ToolStripItem tool = (ToolStripItem)sender;
-            tool.Image = selected_img;
+            ResetList(sender);
         }
 
 
-        private void OnPortSelected(object? sender, EventArgs e)
+        private void OnSetPort(object? sender, EventArgs e)
         {
             if (sender == null)
                 return;
             oracle_Configuration.ComPort = sender.ToString() ?? "COM3";
-            foreach (ToolStripItem toool in output.DropDownItems)
-                toool.Image = null;
-            ToolStripItem tool = (ToolStripItem)sender;
-            tool.Image = selected_img;
+            ResetList(sender);
         }
 
-        private void OnSource(object? sender, EventArgs e){
-            
+        private static void ResetList(object sender)
+        {
+            ToolStripItem sender_item = (ToolStripItem)sender;
+            ToolStripMenuItem dropDown = (ToolStripMenuItem)sender_item.OwnerItem;
+            foreach (ToolStripItem tool in dropDown.DropDownItems)
+            {
+                tool.Image = null;
+            }
+            sender_item.Image = selected_img;
         }
 
-        private void OnClose(object? sender, EventArgs e){
+        private void OnClose(object? sender, EventArgs e)
+        {
             continue_config = false;
             continue_read = false;
             continue_media = false;
@@ -226,16 +217,10 @@ namespace Contexts
         }
 
         [STAThread]
-        //public static async Task Main(string[] args)
         public static void Main(string[] args)
         {
-            //Setup();
-            GUI context = new();
             media_thread.Start();
-            Application.Run(context);
-            //await DeviceHandler.HandlerSetup(args);
-            // all forms are closed.
-
+            Application.Run(new GUI());
         }
     }
 }//net7.0-windows10.0.17763.0
