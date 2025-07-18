@@ -5,7 +5,7 @@ USB operated media display/controller for Windows, Linux, MacOS
 
 - Software agnostic companion app listens to operating system rather than a specific program like Spotify app or Firefox
   - If OS is aware of media, companion app will be as well
-- IPS display for maximum readability at 320x480
+- 320x480 IPS display for maximum readability
 - Display the available metadata of current media
   - Thumbnail
   - Title
