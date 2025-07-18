@@ -1,5 +1,6 @@
 build/
 builds/
+publishing.txt
 managed_components/
 .vscode/
 sdkconfig.old
