@@ -26,7 +26,7 @@ using Contexts;
 class ConfigHandler
 {
     public const string default_path = "config.yaml";
-    private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new DeviceHandler.Oracle_Configuration
+    private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new()
     {
         ComPort = "COM3",
         WriteTimeout = 5000,
@@ -46,7 +46,7 @@ class ConfigHandler
     const string default_config = @"
 #Configuration file
 
-#Port can be found in Device Manager. Look for 
+#Port can be found in the system tray menu or through Device Manager on windows.
 ComPort: COM3
 #Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu too
 VolumeSensitivity: 5
@@ -54,8 +54,15 @@ VolumeSensitivityOptions:
 - 1
 - 5
 - 10
+#Playback device can be selected through the menu. Default will listen to OS for device focus. 
+#But if multiple audio devices are used, like mics and multiple speakers, specifying this will force the volume knob to control only that device
 PlaybackDevice: TOSHIBA-TV
-
+#Change this if you want the album artist displayed instead of the artist, or vice versa
+AlbumArtist: true
+#Change which programs Thoth's Oracle listens to.
+#If multiple are provided, whichever currently has focus will be used.
+#If none are provided, any program displaying media to the OS will be used. These options will get messy if multiple programs are fighting for focus
+#I recommend only specifying one program, or programs that won't be run concurrently.
 MonitoredProgram:
 - MusicBee.exe
 - vlc.exe
@@ -68,7 +75,7 @@ ReadTimeout: 1000
 ConnectionWait: 500
 ReConnectionWait: 2000
 MediaCheck: 500
-ConfigCheck: 5000
+ConfigCheck: 1000
 OracleReadyWait: 400
 DisconnectedWait: 4000
 

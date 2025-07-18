@@ -176,7 +176,7 @@ class DeviceHandler{
     {
         if (device_connected)
             return;
-        serial_setup();
+        SerialSetup();
         reconnect_timer.Stop();
     }
     private static async void OnMediaCheck(object? source, ElapsedEventArgs args)
@@ -209,8 +209,7 @@ class DeviceHandler{
         string nl = new_line ? "\n" : "";
         if (debug_log)
         {
-            if (path == null)
-                path = logs;
+            path ??= logs;
             try
             {
                 File.AppendAllTextAsync(path, "\n" + DateTime.Now.Hour + ":" + DateTime.Now.Minute + ":" + DateTime.Now.Second + "\t\t" + log_text);
@@ -238,7 +237,7 @@ class DeviceHandler{
             WriteLog("Found device: " + playback_device.Name);
         old_config.ComPort ??= "";
         if (!old_config.ComPort.Equals(config.ComPort))
-            serial_setup();
+            SerialSetup();
         old_config = config;
     }
 
@@ -355,7 +354,7 @@ class DeviceHandler{
     private static async Task<int> Resize_Thumbnail()
     {
         WriteLog("Resize");
-        MagickImage img = new MagickImage();
+        MagickImage img = new();
         try{
             img = new MagickImage("thumb.jpg");
             MagickGeometry size = new MagickGeometry(304, 304);
@@ -386,7 +385,7 @@ class DeviceHandler{
         return 0;
     }
     private static async Task Get_Thumbnail(IRandomAccessStreamReference thumby){
-        Windows.Storage.Streams.Buffer thumb_buffer = new Windows.Storage.Streams.Buffer(5000000);
+        Windows.Storage.Streams.Buffer thumb_buffer = new(5000000);
         await read_from_stream(thumb_buffer, thumby);
 
         DataReader read_buffer = DataReader.FromBuffer(thumb_buffer);
@@ -406,7 +405,7 @@ class DeviceHandler{
             }
         }
     }
-    private static void serial_setup()
+    private static void SerialSetup()
     {
         if (serialPort.IsOpen)
         {
