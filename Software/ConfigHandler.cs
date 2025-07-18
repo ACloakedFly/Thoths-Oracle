@@ -1,3 +1,23 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
 using YamlDotNet.Serialization;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization.NamingConventions;
@@ -6,25 +26,60 @@ using Contexts;
 class ConfigHandler
 {
     public const string default_path = "config.yaml";
-    private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new DeviceHandler.Oracle_Configuration
+    private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new()
     {
         ComPort = "COM3",
+        WriteTimeout = 5000,
+        ReadTimeout = 1000,
+        ConnectionWait = 500,
+        ReConnectionWait = 2000,
+        MediaCheck = 500,
+        ConfigCheck = 5000,
+        OracleReadyWait = 400,
+        DisconnectedWait = 4000,
+        VolumeSensitivityOptions = new() {1, 5, 10},
         VolumeSensitivity = 5,
         PlaybackDevice = "Default Device",
         Speed = 921600,
         MonitoredProgram = new(),
     };
     const string default_config = @"
-    #Configuration file
+#Configuration file
 
-    #Inline comments won't be saved
-    VolumeSensitivity: 5
-    PlaybackDevice: Default Device
-    ComPort: COM3
+#Port can be found in the system tray menu or through Device Manager on windows.
+ComPort: COM3
+#Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu too
+VolumeSensitivity: 5
+VolumeSensitivityOptions:
+- 1
+- 5
+- 10
+#Playback device can be selected through the menu. Default will listen to OS for device focus. 
+#But if multiple audio devices are used, like mics and multiple speakers, specifying this will force the volume knob to control only that device
+PlaybackDevice: TOSHIBA-TV
+#Change this if you want the album artist displayed instead of the artist, or vice versa
+AlbumArtist: true
+#Change which programs Thoth's Oracle listens to.
+#If multiple are provided, whichever currently has focus will be used.
+#If none are provided, any program displaying media to the OS will be used. These options will get messy if multiple programs are fighting for focus
+#I recommend only specifying one program, or programs that won't be run concurrently.
+MonitoredProgram:
+- MusicBee.exe
+- vlc.exe
 
-    #But this is cool
-    Speed: 921600
-    MonitoredProgram:
+#Nitty gritty tuning. These values should be good for most circumstances
+#Speed is unused
+Speed: 9600
+WriteTimeout: 5000
+ReadTimeout: 1000
+ConnectionWait: 500
+ReConnectionWait: 2000
+MediaCheck: 500
+ConfigCheck: 1000
+OracleReadyWait: 400
+DisconnectedWait: 4000
+
+LogContinuous: false
     ";
     private static void ExceptionHandler(Exception exception)
     {
@@ -45,7 +100,7 @@ class ConfigHandler
         }
     }
 
-    public static DeviceHandler.Oracle_Configuration LoadConfig(string configurationFile)
+    public static DeviceHandler.Oracle_Configuration LoadConfig(string configurationFile = default_path)
     {
         try
         {
@@ -65,7 +120,7 @@ class ConfigHandler
         }
         return default_oracle_config;
     }
-    public static void SaveConfig(string configurationFile, DeviceHandler.Oracle_Configuration config)
+    public static void SaveConfig(DeviceHandler.Oracle_Configuration config, string configurationFile = default_path)
     {
         try
         {

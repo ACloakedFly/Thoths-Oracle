@@ -1,12 +1,32 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Media.Control;
 using Windows.Storage.Streams;
 using System.IO.Ports;
 using ImageMagick;
 using AudioSwitcher.AudioApi.CoreAudio;
+using AudioSwitcher.AudioApi;
 using Contexts;
-using Windows.Media;
-using System.Diagnostics;
+using System.Timers;
 class DeviceHandler{
     private static class ComCodes
     {
@@ -51,7 +71,7 @@ class DeviceHandler{
     static string captured_media = "";
     static bool first_call = true;
     static bool device_connected = false;
-    static bool device_reconnected = false;
+    static bool device_initial_connected = false;
     static UInt32 song_duration = 0, song_position = 0;
     static UInt16 reset_pos = 0;
     static string logs = "log_", log_dir = "logs\\";
@@ -64,27 +84,40 @@ class DeviceHandler{
     public static GlobalSystemMediaTransportControlsSession? previous_control_session;
     public class Oracle_Configuration
     {
-        public ushort VolumeSensitivity { get; set; }
-        public string? PlaybackDevice { get; set; }
         public string? ComPort { get; set; }
-        public UInt32 Speed { get; set; }
+        public ushort VolumeSensitivity { get; set; }
+        public List<UInt16>? VolumeSensitivityOptions { get; set; }
+        public string? PlaybackDevice { get; set; }
+        public bool AlbumArtist { get; set; }
         public List<string>? MonitoredProgram { get; set; }
+        public uint Speed { get; set; }
+        public ushort WriteTimeout { get; set; }
+        public ushort ReadTimeout { get; set; }
+        public ushort ConnectionWait { get; set; }
+        public ushort ReConnectionWait { get; set; }
+        public ushort MediaCheck { get; set; }
+        public ushort ConfigCheck { get; set; }
+        public ushort OracleReadyWait { get; set; }
+        public ushort DisconnectedWait { get; set; }
+        public bool LogContinuous { get; set; }
 
     };
-    public static Oracle_Configuration config = new Oracle_Configuration();
+    public static Oracle_Configuration config = new();
+    public static Oracle_Configuration old_config = new();
+
+    private static System.Timers.Timer reconnect_timer = new();
+    private static System.Timers.Timer connected_timer = new();
+    private static System.Timers.Timer media_change_timer = new();
+    private static System.Timers.Timer config_timer = new();
 
     //public static async Task HandlerSetup(string[] args)
     public static async void HandlerSetup()
     {
-        //Thread readThread = new(Read);
-        //readThread.Start();
-        GUI.read_thread.Start();
         if (debug_log)
             DebugLogs();
         GeneralSetup();
-        //Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
-        //config_thread.Start();
         GUI.config_thread.Start();
+        GUI.read_thread.Start();
         var gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         gsmtcs = gsmtcsm.GetCurrentSession();
         if (gsmtcs != null)
@@ -97,50 +130,78 @@ class DeviceHandler{
                 }
             }
         }
-        //playback_device = new CoreAudioController().GetDefaultDevice(deviceType, role);
         Gsmtcsm_Current_Session_Changed(gsmtcsm, null);
         gsmtcsm.CurrentSessionChanged += Gsmtcsm_Current_Session_Changed;
-        byte counter = 0;
-        byte discon_counter = 0;
+
+        connected_timer = new System.Timers.Timer(config.ConnectionWait);
+        connected_timer.Elapsed += OnInitialConnection;
+        connected_timer.AutoReset = true;
+        connected_timer.Start();
+
+        reconnect_timer = new System.Timers.Timer(config.ReConnectionWait);
+        reconnect_timer.Elapsed += OnReConnection;
+        reconnect_timer.AutoReset = true;
+        reconnect_timer.Start();
+
+        media_change_timer = new System.Timers.Timer(config.MediaCheck);
+        media_change_timer.Elapsed += OnMediaCheck;
+        media_change_timer.AutoReset = true;
+        media_change_timer.Start();
+
+
+        config_timer = new System.Timers.Timer(config.ConfigCheck);
+        config_timer.Elapsed += OnConfigCheck;
+        config_timer.AutoReset = true;
+        config_timer.Start();
+
         while (GUI.continue_media)
         {
-            if (config_changed)
-            {
-                config_changed = false;
-                GeneralSetup();
-            }
-            counter++;
-            counter %= 5;
-            if (counter == 0 && gsmtcs != null)
-            {
-                if (!captured_media.Equals(current_media))
-                {
-                    await Update_Media(gsmtcs, null);
-                }
-                else if (device_reconnected)
-                {
-                    device_reconnected = false;
-                    await Update_Media(gsmtcs, null);
-                }
-            }
-            discon_counter++;
-            discon_counter %= 50;
-            if (discon_counter == 0)
-            {
-                if (!device_connected)
-                {
-                    serial_setup();
-                }
-            }
             Thread.Sleep(100);
         }
+        media_change_timer.Stop();
+        reconnect_timer.Stop();
+        connected_timer.Stop();
+        config_timer.Stop();
     }
+    private static async void OnInitialConnection(object? source, ElapsedEventArgs args)
+    {
+        if (!device_initial_connected || gsmtcs == null)
+            return;
 
+        device_initial_connected = false;
+        await Update_Media(gsmtcs, null);
+        connected_timer.Stop();
+    }
+    private static void OnReConnection(object? source, ElapsedEventArgs args)
+    {
+        if (device_connected)
+            return;
+        SerialSetup();
+        reconnect_timer.Stop();
+    }
+    private static async void OnMediaCheck(object? source, ElapsedEventArgs args)
+    {
+        if (gsmtcs == null || captured_media.Equals(current_media))
+            return;
+        await Update_Media(gsmtcs, null);
+    }
+    private static void OnConfigCheck(object? source, ElapsedEventArgs args)
+    {
+        if (!config_changed)
+            return;
+        config_changed = false;
+        GeneralSetup();
+    }
     private static void DebugLogs()
     {
         Directory.CreateDirectory(log_dir);
-        logs = string.Concat(log_dir, logs, DateTime.Now.Day + "_" + DateTime.Now.Month + "_" + DateTime.Now.Year + "_t_" + DateTime.Now.Hour + "_" + DateTime.Now.Minute + ".txt");
-        File.AppendAllText(logs, "\nLog Start:\n");
+        if (config.LogContinuous)
+            logs = string.Concat(log_dir, logs, DateTime.Now.Day + "_" + DateTime.Now.Month + "_" + DateTime.Now.Year + "_t_" + DateTime.Now.Hour + "_" + DateTime.Now.Minute + ".txt");
+        else
+        {
+            logs = string.Concat(log_dir, logs, ".txt");
+        }
+        File.WriteAllText(logs, "\nLog Start:\n");
     }
 
     public static void WriteLog(string log_text, bool new_line = true, string? path = null)
@@ -148,8 +209,7 @@ class DeviceHandler{
         string nl = new_line ? "\n" : "";
         if (debug_log)
         {
-            if (path == null)
-                path = logs;
+            path ??= logs;
             try
             {
                 File.AppendAllTextAsync(path, "\n" + DateTime.Now.Hour + ":" + DateTime.Now.Minute + ":" + DateTime.Now.Second + "\t\t" + log_text);
@@ -167,15 +227,25 @@ class DeviceHandler{
     {
         config = new Oracle_Configuration();
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
-        //ConfigHandler.SaveConfig(ConfigHandler.default_path, config);
-        serial_setup();
+        if (config.PlaybackDevice != null)
+        {
+            WriteLog("Looking for " + config.PlaybackDevice);
+            CoreAudioController coreAudioController = new CoreAudioController();
+            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+        }
+        if (playback_device != null)
+            WriteLog("Found device: " + playback_device.Name);
+        old_config.ComPort ??= "";
+        if (!old_config.ComPort.Equals(config.ComPort))
+            SerialSetup();
+        old_config = config;
     }
 
     private static async Task read_from_stream(Windows.Storage.Streams.Buffer buf, IRandomAccessStreamReference stre){
         if(stre == null)
             return;
             try{
-                IRandomAccessStreamWithContentType fd = await stre.OpenReadAsync();//IRandomAccessStreamReferenceMethods
+                IRandomAccessStreamWithContentType fd = await stre.OpenReadAsync();
                 await fd.ReadAsync(buf, buf.Capacity, InputStreamOptions.ReadAhead);
             }
             catch(Exception ex){
@@ -193,7 +263,7 @@ class DeviceHandler{
         WriteLog("Source App changed to: " + session.SourceAppUserModelId);
         if (config.MonitoredProgram != null)
         {
-            if (!config.MonitoredProgram.Contains(session.SourceAppUserModelId))
+            if (!config.MonitoredProgram.Contains(session.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase))
             {
                 WriteLog("Session does not match selections");
                 return;
@@ -211,16 +281,16 @@ class DeviceHandler{
         session.PlaybackInfoChanged += PlaybackInfoChanged;
         gsmtcs = session;
     }
-    private static void PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
+    private static async void PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
     {
         GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = sender.GetPlaybackInfo();
         GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties = sender.GetTimelineProperties();
-        song_duration = (UInt32)timelineProperties.EndTime.TotalSeconds;
-        song_position = (UInt32)timelineProperties.Position.TotalSeconds;
+        song_duration = (uint)timelineProperties.EndTime.TotalSeconds;
+        song_position = (uint)timelineProperties.Position.TotalSeconds;
         byte byt = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
         byte[] bytes = BitConverter.GetBytes(song_position).ToArray().Concat(BitConverter.GetBytes(song_duration).ToArray()).ToArray();
         WriteLog("We playing? " + byt + " we reseting? " + reset_pos);
-        Write_Bytes(ComCodes.DurPos, 8, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
+        await Write_Bytes(ComCodes.DurPos, (uint)bytes.Length, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
         //don't reset position when (duration == 0 and reset pos == 0)
         reset_pos = 0;
     }
@@ -235,6 +305,7 @@ class DeviceHandler{
             Album = media_properties.AlbumTitle.Length > 0 ? media_properties.AlbumTitle : "No Data",
             Artist = media_properties.Artist.Length > 0 ? media_properties.Artist : "No Data"
         };
+        info_.Artist = config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist;
         if (updating_media)
         {
             queued_media = true;
@@ -269,6 +340,9 @@ class DeviceHandler{
         await Get_Thumbnail(thumb_stream);
         await Resize_Thumbnail();
         updating_media = false;
+        if (gsmtcs == null)
+            return 0;
+        PlaybackInfoChanged(gsmtcs, null);
         return 0;
     }
 
@@ -280,7 +354,7 @@ class DeviceHandler{
     private static async Task<int> Resize_Thumbnail()
     {
         WriteLog("Resize");
-        MagickImage img = new MagickImage();
+        MagickImage img = new();
         try{
             img = new MagickImage("thumb.jpg");
             MagickGeometry size = new MagickGeometry(304, 304);
@@ -311,7 +385,7 @@ class DeviceHandler{
         return 0;
     }
     private static async Task Get_Thumbnail(IRandomAccessStreamReference thumby){
-        Windows.Storage.Streams.Buffer thumb_buffer = new Windows.Storage.Streams.Buffer(5000000);
+        Windows.Storage.Streams.Buffer thumb_buffer = new(5000000);
         await read_from_stream(thumb_buffer, thumby);
 
         DataReader read_buffer = DataReader.FromBuffer(thumb_buffer);
@@ -331,7 +405,7 @@ class DeviceHandler{
             }
         }
     }
-    private static void serial_setup()
+    private static void SerialSetup()
     {
         if (serialPort.IsOpen)
         {
@@ -344,31 +418,27 @@ class DeviceHandler{
         serialPort.StopBits = StopBits.Two;
         serialPort.Handshake = Handshake.RequestToSend;
         serialPort.DtrEnable = true;
-        serialPort.ReadTimeout = 5000;
-        serialPort.WriteTimeout = 10000;
+        serialPort.ReadTimeout = config.ReadTimeout;
+        serialPort.WriteTimeout = config.WriteTimeout;
         try
         {
             serialPort.Open();
             device_connected = true;
-            while (!oracle_ready)
-            {
-                Thread.Sleep(400);
-                WriteLog("Port opened, waiting for device to be ready ");
-            }
             Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
-            if (gsmtcs != null)
-                device_reconnected = true;
+            device_initial_connected = true;
         }
         catch (FileNotFoundException)
         {
             WriteLog("No such device. Ensure Selected com port is correct and device is plugged in.");
             serialPort.Close();
-            device_connected = false;
+            //device_connected = false;
+            reconnect_timer.Start();
         }
         catch (ArgumentException)
         {
             WriteLog("COM port is not valid. Ensure it is in the format of COM##");
-            device_connected = false;
+            reconnect_timer.Start();
+            //device_connected = false;
         }
     }
     public static async void Read()
@@ -409,11 +479,11 @@ class DeviceHandler{
                         vol = await playback_device.GetVolumeAsync();
                         if (cmd == InputCodes.VolumeDown && vol != 0)
                         {
-                            await playback_device.SetVolumeAsync(vol - GUI.volume_sens);
+                            await playback_device.SetVolumeAsync(vol - config.VolumeSensitivity);
                         }
                         else if (cmd == InputCodes.VolumeUp && vol != 100)
                         {
-                            await playback_device.SetVolumeAsync(vol + GUI.volume_sens);
+                            await playback_device.SetVolumeAsync(vol + config.VolumeSensitivity);
                         }
                         else if (cmd == InputCodes.Mute)
                         {
@@ -455,13 +525,15 @@ class DeviceHandler{
             {
                 WriteLog("Device has been disconnected, please reconnect");
                 device_connected = false;
-                Thread.Sleep(4000);
+                reconnect_timer.Start();
+                Thread.Sleep(config.DisconnectedWait);
             }
             catch (InvalidOperationException)
             {
                 WriteLog("The port is closed");
                 device_connected = false;
-                Thread.Sleep(4000);
+                reconnect_timer.Start();
+                Thread.Sleep(config.DisconnectedWait);
             }
             catch (ArgumentOutOfRangeException ex)
             {
@@ -482,7 +554,7 @@ class DeviceHandler{
                 return Task.FromResult(0);
             }
             attempts++;
-            Thread.Sleep(400);
+            Thread.Sleep(config.OracleReadyWait);
             WriteLog("Waiting for Oracle to be ready ");
         }
         if (serial_error != 0)
