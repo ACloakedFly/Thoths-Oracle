@@ -1,3 +1,23 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
 using System.IO.Ports;
 using AudioSwitcher.AudioApi.CoreAudio;
 using AudioSwitcher.AudioApi;
@@ -14,6 +34,8 @@ namespace Contexts
         ToolStripMenuItem volume_sense = new ToolStripMenuItem();
         ToolStripMenuItem output = new ToolStripMenuItem();
         ToolStripMenuItem default_audio_output = new ToolStripMenuItem();
+        ToolStripMenuItem title = new();
+        ToolStripMenuItem exit = new();
         Image close_image = SystemIcons.Asterisk.ToBitmap();
         IEnumerable<CoreAudioDevice>? cad = null;
         public static bool continue_read = true;
@@ -36,16 +58,16 @@ namespace Contexts
             Image logo_img = Image.FromFile(icon_paths + "small.png");
             selected_img = Image.FromFile(icon_paths + "Selected.png");
             //Image image = SystemIcons.Error.ToBitmap();
-            port = new ToolStripMenuItem("Port", null);
+            port = new ToolStripMenuItem("Port", null, new EventHandler(OnPortEnter));
             volume_sense = new ToolStripMenuItem("Volume Knob Sensitivity", null);
             output = new ToolStripMenuItem("Playback Devices", null);
-            ToolStripMenuItem exit = new("Exit", Bitmap.FromFile(icon_paths + "Exit_symbol.png"), new EventHandler(OnClose));
+            exit = new("Exit", Bitmap.FromFile(icon_paths + "Exit_symbol.png"), new EventHandler(OnClose));
 
             default_audio_output = new ToolStripMenuItem("Default Device", null, new EventHandler(OnSetAudioDevice));
             output.DropDownItems.Add(default_audio_output);
             default_audio_output.Image = selected_img;
 
-            ToolStripMenuItem title = new("Thoth's Oracle", null);
+            title = new("Thoth's Oracle", null);
             title.Image = logo_img;
             title.Font = new Font(title.Font, FontStyle.Bold);
 
@@ -64,20 +86,24 @@ namespace Contexts
                 Text = "Thoth's Oracle",
                 ContextMenuStrip = contextMenu
             };
-
+            notifyIcon.ContextMenuStrip.AutoClose = true;
             notifyIcon.MouseClick += new MouseEventHandler(TopMenuClick);
             notifyIcon.ContextMenuStrip.Closed += new ToolStripDropDownClosedEventHandler(TopMenuExit);
-            notifyIcon.ContextMenuStrip.MouseEnter += new EventHandler(MenuEnter);
-            output.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
-            output.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
             volume_sense.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
             volume_sense.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
             port.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
             port.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
+            output.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
+            output.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
+        }
+        private void OnPortEnter(object? sender, EventArgs args)
+        {
+            GetPorts();
         }
         private void TopMenuExit(object? sender, EventArgs args)
         {
             ConfigHandler.SaveConfig(oracle_Configuration);
+            DeviceHandler.WriteLog("Change config");
         }
 
         private void TopMenuClick(object? sender, EventArgs args)
@@ -117,13 +143,6 @@ namespace Contexts
             ResetList(sender);
 
         }
-        private void MenuEnter(object? sender, EventArgs args)
-        {
-            if (notifyIcon.ContextMenuStrip == null)
-                return;
-            notifyIcon.ContextMenuStrip.BringToFront();
-            notifyIcon.ContextMenuStrip.AutoClose = false;
-        }
         private void OnAutoCloseEnable(object? sender, EventArgs args)
         {
             if (sender == null)
@@ -148,7 +167,7 @@ namespace Contexts
                 int i = 0;
                 foreach (string p in ports_s)
                 {
-                    port.DropDownItems.Add(new ToolStripMenuItem(p, close_image, new EventHandler(OnSetPort)));
+                    port.DropDownItems.Add(p, close_image, new EventHandler(OnSetPort));
                     if (p.Equals(oracle_Configuration.ComPort))
                         port.DropDownItems[i].Image = selected_img;
                     i++;
@@ -168,7 +187,7 @@ namespace Contexts
             {
                 if (index < output.DropDownItems.Count)
                     continue;
-                output.DropDownItems.Add(new ToolStripMenuItem(c.Name, null, new EventHandler(OnSetAudioDevice)));
+                output.DropDownItems.Add(c.Name, null, new EventHandler(OnSetAudioDevice));
                 if (c.Name.Equals(oracle_Configuration.PlaybackDevice))
                 {
                     output.DropDownItems[index].Image = selected_img;
@@ -211,6 +230,13 @@ namespace Contexts
             continue_read = false;
             continue_media = false;
             notifyIcon.Visible = false;
+            if (notifyIcon.ContextMenuStrip != null)
+            {
+                notifyIcon.ContextMenuStrip.AutoClose = true;
+                notifyIcon.ContextMenuStrip.Close();
+            }
+            contextMenu.Close();
+            contextMenu.Visible = false;
             notifyIcon.Dispose();
             Dispose();
             ExitThread();

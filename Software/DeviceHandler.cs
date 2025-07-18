@@ -1,3 +1,23 @@
+/*
+===========================================================================
+Copyright (C) 2025 Dominique Negm
+
+This file is part of Thoth's Oracle source code.
+
+Thoth's Oracle source code is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 3 of the License,
+or (at your option) any later version.
+
+Thoth's Oracle source code is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
+===========================================================================
+*/
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Media.Control;
 using Windows.Storage.Streams;
@@ -6,10 +26,7 @@ using ImageMagick;
 using AudioSwitcher.AudioApi.CoreAudio;
 using AudioSwitcher.AudioApi;
 using Contexts;
-using Windows.Media;
-using System.Diagnostics;
 using System.Timers;
-using System.Threading.Tasks;
 class DeviceHandler{
     private static class ComCodes
     {
@@ -71,6 +88,7 @@ class DeviceHandler{
         public ushort VolumeSensitivity { get; set; }
         public List<UInt16>? VolumeSensitivityOptions { get; set; }
         public string? PlaybackDevice { get; set; }
+        public bool AlbumArtist { get; set; }
         public List<string>? MonitoredProgram { get; set; }
         public uint Speed { get; set; }
         public ushort WriteTimeout { get; set; }
@@ -246,7 +264,7 @@ class DeviceHandler{
         WriteLog("Source App changed to: " + session.SourceAppUserModelId);
         if (config.MonitoredProgram != null)
         {
-            if (!config.MonitoredProgram.Contains(session.SourceAppUserModelId))
+            if (!config.MonitoredProgram.Contains(session.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase))
             {
                 WriteLog("Session does not match selections");
                 return;
@@ -264,16 +282,16 @@ class DeviceHandler{
         session.PlaybackInfoChanged += PlaybackInfoChanged;
         gsmtcs = session;
     }
-    private static void PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
+    private static async void PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
     {
         GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = sender.GetPlaybackInfo();
         GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties = sender.GetTimelineProperties();
-        song_duration = (UInt32)timelineProperties.EndTime.TotalSeconds;
-        song_position = (UInt32)timelineProperties.Position.TotalSeconds;
+        song_duration = (uint)timelineProperties.EndTime.TotalSeconds;
+        song_position = (uint)timelineProperties.Position.TotalSeconds;
         byte byt = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
         byte[] bytes = BitConverter.GetBytes(song_position).ToArray().Concat(BitConverter.GetBytes(song_duration).ToArray()).ToArray();
         WriteLog("We playing? " + byt + " we reseting? " + reset_pos);
-        Write_Bytes(ComCodes.DurPos, (uint)bytes.Length, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
+        await Write_Bytes(ComCodes.DurPos, (uint)bytes.Length, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
         //don't reset position when (duration == 0 and reset pos == 0)
         reset_pos = 0;
     }
@@ -288,6 +306,7 @@ class DeviceHandler{
             Album = media_properties.AlbumTitle.Length > 0 ? media_properties.AlbumTitle : "No Data",
             Artist = media_properties.Artist.Length > 0 ? media_properties.Artist : "No Data"
         };
+        info_.Artist = config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist;
         if (updating_media)
         {
             queued_media = true;
@@ -322,6 +341,9 @@ class DeviceHandler{
         await Get_Thumbnail(thumb_stream);
         await Resize_Thumbnail();
         updating_media = false;
+        if (gsmtcs == null)
+            return 0;
+        PlaybackInfoChanged(gsmtcs, null);
         return 0;
     }
 
