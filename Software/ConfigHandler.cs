@@ -56,7 +56,7 @@ VolumeSensitivityOptions:
 - 10
 #Playback device can be selected through the menu. Default will listen to OS for device focus. 
 #But if multiple audio devices are used, like mics and multiple speakers, specifying this will force the volume knob to control only that device
-PlaybackDevice: TOSHIBA-TV
+PlaybackDevice: Default Device
 #Change this if you want the album artist displayed instead of the artist, or vice versa
 AlbumArtist: true
 #Change which programs Thoth's Oracle listens to.
