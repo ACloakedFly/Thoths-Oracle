@@ -25,7 +25,45 @@ using System.ComponentModel;
 
 namespace Contexts
 {
-    // The class that handles the creation of the application windows
+    public class OracleRenderer : ToolStripProfessionalRenderer
+    {
+        public Color border_colour = Color.FromArgb(255, 64, 64, 90);
+        public Color highlight_colour = Color.FromArgb(255, 60, 50, 40);
+        public Color default_colour = Color.FromArgb(255, 120, 110, 94);
+        public Color default_text_colour = Color.FromArgb(255, 210, 210, 240);
+        public Color default_border_colour = Color.Transparent;
+        public Color menu_border_colour = Color.FromArgb(255, 64, 64, 90);
+
+        protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+        {
+            e.ArrowColor = default_text_colour;
+            base.OnRenderArrow(e);
+        }
+        protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+        {
+            Rectangle rc = new Rectangle(Point.Empty, e.Item.Size);
+            Color border = e.Item.Selected ? border_colour : default_border_colour;
+            Color highlight = e.Item.Selected ? highlight_colour : default_colour;
+            Rectangle rc_big = new Rectangle(new Point(1, 1), new Size(rc.Width - 2, rc.Height - 2));
+            using (SolidBrush brush = new SolidBrush(highlight))
+            {
+                e.Graphics.FillRectangle(brush, rc);
+            }
+            using Pen pen = new(border, 1);
+            e.Graphics.DrawRectangle(pen, rc_big);
+        }
+        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+        {
+            Rectangle rc = new(new Point(0, 1), new Size(e.ToolStrip.Size.Width, e.ToolStrip.Size.Height - 2));
+            using Pen pen = new(menu_border_colour, 2);
+            e.Graphics.DrawRectangle(pen, rc);
+        }
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            e.TextColor = default_text_colour;
+            base.OnRenderItemText(e);
+        }
+    } 
     class GUI : ApplicationContext
     {
         private NotifyIcon notifyIcon;
@@ -36,7 +74,7 @@ namespace Contexts
         ToolStripMenuItem default_audio_output = new ToolStripMenuItem();
         ToolStripMenuItem title = new();
         ToolStripMenuItem exit = new();
-        Image close_image = SystemIcons.Asterisk.ToBitmap();
+        ToolStripMenuItem wallpaper_mode = new();
         IEnumerable<CoreAudioDevice>? cad = null;
         public static bool continue_read = true;
         public static bool continue_config = true;
@@ -55,30 +93,41 @@ namespace Contexts
         {
             string icon_paths = "Icons_Images\\";
             string path_icon = icon_paths + "huge.png";
-            Image logo_img = Image.FromFile(icon_paths + "small.png");
-            selected_img = Image.FromFile(icon_paths + "Selected.png");
-            //Image image = SystemIcons.Error.ToBitmap();
+            Image logo_img = SystemIcons.Application.ToBitmap();
+            Image exit_symbol = SystemIcons.Error.ToBitmap();
+            try
+            {
+                logo_img = Image.FromFile(icon_paths + "small.png");
+                selected_img = Image.FromFile(icon_paths + "Selected.png");
+                exit_symbol = Image.FromFile(icon_paths + "Exit_Symbol.png");
+            }
+            catch (Exception ex)
+            {
+                DeviceHandler.WriteLog(ex.ToString());
+            }
             port = new ToolStripMenuItem("Port", null, new EventHandler(OnPortEnter));
             volume_sense = new ToolStripMenuItem("Volume Knob Sensitivity", null);
             output = new ToolStripMenuItem("Playback Devices", null);
-            exit = new("Exit", Bitmap.FromFile(icon_paths + "Exit_symbol.png"), new EventHandler(OnClose));
+            exit = new("Exit", exit_symbol, new EventHandler(OnClose));
+            wallpaper_mode = new("Wallpaper Mode", null);
 
+            wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Disabled", null, new EventHandler(OnWallpaperToggle)));
+            wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Enabled", null, new EventHandler(OnWallpaperToggle)));
             default_audio_output = new ToolStripMenuItem("Default Device", null, new EventHandler(OnSetAudioDevice));
             output.DropDownItems.Add(default_audio_output);
             default_audio_output.Image = selected_img;
+
 
             title = new("Thoth's Oracle", null);
             title.Image = logo_img;
             title.Font = new Font(title.Font, FontStyle.Bold);
 
+
             Bitmap logo_icon = (Bitmap)Bitmap.FromFile(path_icon);
             IntPtr logo_ptr = logo_icon.GetHicon();
             exit.MouseUp += new MouseEventHandler(OnClose);
-            contextMenu.Items.AddRange(new ToolStripItem[] { title, port, volume_sense, output, exit });
-            contextMenu.BackColor = Color.Beige;
-            volume_sense.DropDown.BackColor = Color.Beige;
-            port.DropDown.BackColor = Color.Beige;
-            output.DropDown.BackColor = Color.Beige;
+            contextMenu.Items.AddRange(new ToolStripItem[] { title, port, volume_sense, output, wallpaper_mode, exit });
+            contextMenu.Renderer = new OracleRenderer();
             notifyIcon = new NotifyIcon
             {
                 Icon = Icon.FromHandle(logo_ptr),
@@ -95,6 +144,29 @@ namespace Contexts
             port.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
             output.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
             output.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
+            wallpaper_mode.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
+            wallpaper_mode.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
+        }
+
+        private void OnWallpaperToggle(object? sender, EventArgs args)
+        {
+            if (sender == null)
+                return;
+            string? sender_string = sender.ToString();
+            sender_string ??= "";
+            if (sender_string.Equals("Disabled"))
+            {
+                oracle_Configuration.WallpaperMode = false;
+                wallpaper_mode.DropDown.Items[0].Image = selected_img;
+                wallpaper_mode.DropDown.Items[1].Image = null;
+            }
+            else
+            {
+                oracle_Configuration.WallpaperMode = true;
+                wallpaper_mode.DropDown.Items[0].Image = null;
+                wallpaper_mode.DropDown.Items[1].Image = selected_img;
+            }
+            DeviceHandler.WriteLog("Wallpaper? " + oracle_Configuration.WallpaperMode);
         }
         private void OnPortEnter(object? sender, EventArgs args)
         {
@@ -110,6 +182,10 @@ namespace Contexts
         {
             oracle_Configuration = ConfigHandler.LoadConfig();
             GetPorts();
+            int wp_mode = oracle_Configuration.WallpaperMode ? 1 : 0;
+            int not_wp_mode = !oracle_Configuration.WallpaperMode ? 1 : 0;
+            wallpaper_mode.DropDown.Items[wp_mode].Image = selected_img;
+            wallpaper_mode.DropDown.Items[not_wp_mode].Image = null;
             oracle_Config_Old.VolumeSensitivityOptions ??= new List<ushort> { };
             if (oracle_Configuration.VolumeSensitivityOptions == null || oracle_Config_Old.VolumeSensitivityOptions == null)
                 return;
@@ -159,7 +235,8 @@ namespace Contexts
             if (dropDown.OwnerItem.Text.Equals("Playback Devices"))
                 GetAudioDevices();
         }
-        private void GetPorts() {
+        private void GetPorts()
+        {
             try
             {
                 string[] ports_s = SerialPort.GetPortNames();
@@ -167,7 +244,7 @@ namespace Contexts
                 int i = 0;
                 foreach (string p in ports_s)
                 {
-                    port.DropDownItems.Add(p, close_image, new EventHandler(OnSetPort));
+                    port.DropDownItems.Add(p, null, new EventHandler(OnSetPort));
                     if (p.Equals(oracle_Configuration.ComPort))
                         port.DropDownItems[i].Image = selected_img;
                     i++;
@@ -246,6 +323,7 @@ namespace Contexts
         public static void Main(string[] args)
         {
             media_thread.Start();
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.Run(new GUI());
         }
     }

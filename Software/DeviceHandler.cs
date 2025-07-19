@@ -27,6 +27,8 @@ using AudioSwitcher.AudioApi.CoreAudio;
 using AudioSwitcher.AudioApi;
 using Contexts;
 using System.Timers;
+using Windows.Storage;
+using System.Threading.Tasks;
 class DeviceHandler{
     private static class ComCodes
     {
@@ -54,7 +56,9 @@ class DeviceHandler{
     static bool queued_media = false;
     static IRandomAccessStreamReference? queued_thumb_stream;
     static bool oracle_ready = true;
-    static bool debug_log = true, debug_console = false;
+    private static readonly bool debug_log = true;
+    private static readonly bool debug_console = false;
+
     class Info_Buffers
     {
         public string Title { get; set; }
@@ -72,13 +76,14 @@ class DeviceHandler{
     static bool first_call = true;
     static bool device_connected = false;
     static bool device_initial_connected = false;
-    static UInt32 song_duration = 0, song_position = 0;
-    static UInt16 reset_pos = 0;
+    static uint song_duration = 0, song_position = 0;
+    static ushort reset_pos = 0;
     static string logs = "log_", log_dir = "logs\\";
+    const string wallpaper_path = "Wallpapers\\"; 
     static SerialPort serialPort = new SerialPort();
     public static bool config_changed = false;
     static bool img_exists = false;
-    const UInt16 max_attempts = 20;
+    const ushort max_attempts = 20;
     static uint serial_error = 0;
     public static GlobalSystemMediaTransportControlsSession? gsmtcs;
     public static GlobalSystemMediaTransportControlsSession? previous_control_session;
@@ -86,10 +91,12 @@ class DeviceHandler{
     {
         public string? ComPort { get; set; }
         public ushort VolumeSensitivity { get; set; }
-        public List<UInt16>? VolumeSensitivityOptions { get; set; }
+        public List<ushort>? VolumeSensitivityOptions { get; set; }
         public string? PlaybackDevice { get; set; }
         public bool AlbumArtist { get; set; }
         public List<string>? MonitoredProgram { get; set; }
+        public bool WallpaperMode { get; set; }
+        public ushort WallpaperPeriod { get; set; }
         public uint Speed { get; set; }
         public ushort WriteTimeout { get; set; }
         public ushort ReadTimeout { get; set; }
@@ -109,6 +116,9 @@ class DeviceHandler{
     private static System.Timers.Timer connected_timer = new();
     private static System.Timers.Timer media_change_timer = new();
     private static System.Timers.Timer config_timer = new();
+    private static System.Timers.Timer wallpaper_timer = new();
+    private static List<string> wallpapers = new();
+    private static ushort current_wallpaper = 0;
 
     //public static async Task HandlerSetup(string[] args)
     public static async void HandlerSetup()
@@ -118,21 +128,35 @@ class DeviceHandler{
         GeneralSetup();
         GUI.config_thread.Start();
         GUI.read_thread.Start();
-        var gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        GlobalSystemMediaTransportControlsSessionManager gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         gsmtcs = gsmtcsm.GetCurrentSession();
-        if (gsmtcs != null)
+        if (gsmtcs != null && config.MonitoredProgram != null)
         {
-            if (config.MonitoredProgram != null)
+            if (!config.MonitoredProgram.Contains(gsmtcs.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase))
             {
-                if (!config.MonitoredProgram.Contains(gsmtcs.SourceAppUserModelId))
-                {
-                    gsmtcs = null;
-                }
+                gsmtcs = null;
             }
         }
         Gsmtcsm_Current_Session_Changed(gsmtcsm, null);
         gsmtcsm.CurrentSessionChanged += Gsmtcsm_Current_Session_Changed;
 
+        media_change_timer = new System.Timers.Timer(config.MediaCheck);
+        media_change_timer.Elapsed += OnMediaCheck;
+        media_change_timer.AutoReset = true;
+
+        wallpaper_timer = new System.Timers.Timer(config.WallpaperPeriod * 60 * 1000);
+        wallpaper_timer.Elapsed += WallpaperTimer;
+        wallpaper_timer.AutoReset = true;
+
+        wallpapers = Directory.GetFiles(wallpaper_path).ToList();
+        if (!config.WallpaperMode)
+        {
+            media_change_timer.Start();
+        }
+        else
+        {
+            wallpaper_timer.Start();
+        }
         connected_timer = new System.Timers.Timer(config.ConnectionWait);
         connected_timer.Elapsed += OnInitialConnection;
         connected_timer.AutoReset = true;
@@ -142,12 +166,6 @@ class DeviceHandler{
         reconnect_timer.Elapsed += OnReConnection;
         reconnect_timer.AutoReset = true;
         reconnect_timer.Start();
-
-        media_change_timer = new System.Timers.Timer(config.MediaCheck);
-        media_change_timer.Elapsed += OnMediaCheck;
-        media_change_timer.AutoReset = true;
-        media_change_timer.Start();
-
 
         config_timer = new System.Timers.Timer(config.ConfigCheck);
         config_timer.Elapsed += OnConfigCheck;
@@ -162,6 +180,20 @@ class DeviceHandler{
         reconnect_timer.Stop();
         connected_timer.Stop();
         config_timer.Stop();
+    }
+    private static async void WallpaperTimer(object? source, ElapsedEventArgs args)
+    {
+        await OnWallpaperChange(1);
+    }
+    private static async Task<int> OnWallpaperChange(sbyte direction)
+    {
+        if (direction != 0)
+            current_wallpaper += (ushort)direction;
+        current_wallpaper %= (ushort)wallpapers.Count;
+        MagickImage img = new(wallpapers[current_wallpaper]);
+        img.Write("thumb.jpg", MagickFormat.Jpg);
+        await Resize_Thumbnail();
+        return 0;
     }
     private static async void OnInitialConnection(object? source, ElapsedEventArgs args)
     {
@@ -227,12 +259,22 @@ class DeviceHandler{
     {
         config = new Oracle_Configuration();
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
-        if (config.PlaybackDevice != null)
+        if (config.WallpaperMode)
         {
-            WriteLog("Looking for " + config.PlaybackDevice);
-            CoreAudioController coreAudioController = new CoreAudioController();
-            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+            wallpaper_timer.Start();
+            media_change_timer.Stop();
         }
+        else
+        {
+            wallpaper_timer.Stop();
+            media_change_timer.Start();
+        }
+        if (config.PlaybackDevice != null)
+            {
+                WriteLog("Looking for " + config.PlaybackDevice);
+                CoreAudioController coreAudioController = new CoreAudioController();
+                playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+            }
         if (playback_device != null)
             WriteLog("Found device: " + playback_device.Name);
         old_config.ComPort ??= "";
@@ -335,7 +377,7 @@ class DeviceHandler{
                 thumb_stream = queued_thumb_stream;
             current_media = captured_media;
         }
-        await Write_Bytes(ComCodes.SystemMsg, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+        await Write_Bytes(ComCodes.SystemMsg, 0, System.Text.Encoding.UTF8.GetBytes("s"), (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (uint)DateTime.Now.TimeOfDay.TotalSeconds);
         await Write_Bytes(ComCodes.Text, (uint)System.Text.Encoding.UTF8.GetByteCount(current_media), System.Text.Encoding.UTF8.GetBytes(current_media), 0, 0);
         await Get_Thumbnail(thumb_stream);
         await Resize_Thumbnail();
@@ -424,7 +466,7 @@ class DeviceHandler{
         {
             serialPort.Open();
             device_connected = true;
-            Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (UInt32)DateTime.Now.TimeOfDay.TotalSeconds);
+            Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (uint)DateTime.Now.TimeOfDay.TotalSeconds);
             device_initial_connected = true;
         }
         catch (FileNotFoundException)
@@ -451,7 +493,6 @@ class DeviceHandler{
             try
             {
                 mes = serialPort.ReadByte();
-                string message = Convert.ToChar(mes).ToString();
                 string stst = "reg";
                 if (mes == ComCodes.Error)
                 {
@@ -473,6 +514,8 @@ class DeviceHandler{
                 else if (mes == ComCodes.Input)
                 {
                     cmd = (byte)serialPort.ReadChar();
+                    //The Oracle sends a new line at the end of each command, so read another char to get it out of the buffer
+                    serialPort.ReadChar();
                     WriteLog("Command: " + cmd);
                     if (cmd <= InputCodes.Mute && playback_device != null)
                     {
@@ -490,24 +533,31 @@ class DeviceHandler{
                             await playback_device.ToggleMuteAsync();
                         }
                     }
-                    else if (cmd > InputCodes.Mute && gsmtcs != null)
+                    else if (cmd > InputCodes.Mute)
                     {
-                        if (cmd == InputCodes.PreviousTrack)
+                        if (config.WallpaperMode)
                         {
-                            await gsmtcs.TrySkipPreviousAsync();
+                            await OnWallpaperChange((sbyte)((sbyte)cmd - InputCodes.PlayPause));
                         }
-                        else if (cmd == InputCodes.PlayPause)
+                        else if(!config.WallpaperMode && gsmtcs != null)
                         {
-                            await gsmtcs.TryTogglePlayPauseAsync();
-                            WriteLog(gsmtcs.SourceAppUserModelId);
-                            //Console.WriteLine("Time is: " + gsmtcs.GetTimelineProperties().Position);
-                        }
-                        else if (cmd == InputCodes.NextTrack)
-                        {
-                            await gsmtcs.TrySkipNextAsync();
+                            if (cmd == InputCodes.PreviousTrack)
+                            {
+                                await gsmtcs.TrySkipPreviousAsync();
+                            }
+                            else if (cmd == InputCodes.PlayPause)
+                            {
+                                await gsmtcs.TryTogglePlayPauseAsync();
+                                WriteLog(gsmtcs.SourceAppUserModelId);
+                                //Console.WriteLine("Time is: " + gsmtcs.GetTimelineProperties().Position);
+                            }
+                            else if (cmd == InputCodes.NextTrack)
+                            {
+                                await gsmtcs.TrySkipNextAsync();
+                            }
                         }
                     }
-                    if (gsmtcs == null)
+                    if (gsmtcs == null && !config.WallpaperMode)
                     {
                         WriteLog("GSMTCS is null :(");
                     }
@@ -542,7 +592,7 @@ class DeviceHandler{
 
         }
     }
-    private static Task<int> Write_Bytes(byte tag, uint length, byte[]? s, ushort width, ushort height, UInt32 dur = 0)
+    private static Task<int> Write_Bytes(byte tag, uint length, byte[]? s, ushort width, ushort height, uint dur = 0)
     {
         if (!device_connected)
             return Task.FromResult(0);

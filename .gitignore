@@ -2,6 +2,8 @@ build/
 builds/
 publishing.txt
 managed_components/
+**/Wallpapers/**
+!**/Wallpapers/huge.png
 .vscode/
 sdkconfig.old
 bin/
