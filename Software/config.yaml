@@ -34,7 +34,7 @@ WriteTimeout: 5000
 ReadTimeout: 1000
 ConnectionWait: 500
 ReConnectionWait: 2000
-MediaCheck: 500
+MediaCheck: 1000
 ConfigCheck: 1000
 OracleReadyWait: 400
 DisconnectedWait: 4000
