@@ -34,14 +34,19 @@ class ConfigHandler
         ConnectionWait = 500,
         ReConnectionWait = 2000,
         MediaCheck = 500,
-        ConfigCheck = 5000,
+        ConfigCheck = 1000,
         OracleReadyWait = 400,
         DisconnectedWait = 4000,
-        VolumeSensitivityOptions = new() {1, 5, 10},
+        VolumeSensitivityOptions = new() { 1, 3, 5 },
         VolumeSensitivity = 5,
         PlaybackDevice = "Default Device",
         Speed = 921600,
         MonitoredProgram = new(),
+        AlbumArtist = false,
+        WallpaperMode = false,
+        WallpaperPeriod = 5,
+        LogContinuous = false,
+
     };
     const string default_config = @"
 #Configuration file
@@ -52,8 +57,8 @@ ComPort: COM3
 VolumeSensitivity: 5
 VolumeSensitivityOptions:
 - 1
+- 3
 - 5
-- 10
 #Playback device can be selected through the menu. Default will listen to OS for device focus. 
 #But if multiple audio devices are used, like mics and multiple speakers, specifying this will force the volume knob to control only that device
 PlaybackDevice: Default Device
@@ -66,6 +71,11 @@ AlbumArtist: true
 MonitoredProgram:
 - MusicBee.exe
 - vlc.exe
+#Wallpaper mode for cycling through images in Wallpapers folder
+WallpaperMode: false
+#How long before image changes in minutes
+WallpaperPeriod: 5
+
 
 #Nitty gritty tuning. These values should be good for most circumstances
 #Speed is unused

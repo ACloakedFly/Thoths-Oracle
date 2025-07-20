@@ -27,12 +27,12 @@ namespace Contexts
 {
     public class OracleRenderer : ToolStripProfessionalRenderer
     {
-        public Color border_colour = Color.FromArgb(255, 64, 64, 90);
+        public Color border_colour = Color.FromArgb(255, 0, 85, 177);
         public Color highlight_colour = Color.FromArgb(255, 60, 50, 40);
         public Color default_colour = Color.FromArgb(255, 120, 110, 94);
-        public Color default_text_colour = Color.FromArgb(255, 210, 210, 240);
-        public Color default_border_colour = Color.Transparent;
-        public Color menu_border_colour = Color.FromArgb(255, 64, 64, 90);
+        public Color default_text_colour = Color.FromArgb(255, 240, 240, 240);
+        public Color default_border_colour = Color.FromArgb(255, 100, 90, 84);
+        public Color menu_border_colour = Color.FromArgb(255, 20, 85, 140);
 
         protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
         {
@@ -41,11 +41,11 @@ namespace Contexts
         }
         protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
         {
-            Rectangle rc = new Rectangle(Point.Empty, e.Item.Size);
+            Rectangle rc = new(Point.Empty, e.Item.Size);
             Color border = e.Item.Selected ? border_colour : default_border_colour;
             Color highlight = e.Item.Selected ? highlight_colour : default_colour;
-            Rectangle rc_big = new Rectangle(new Point(1, 1), new Size(rc.Width - 2, rc.Height - 2));
-            using (SolidBrush brush = new SolidBrush(highlight))
+            Rectangle rc_big = new(new Point(1, 0), new Size(rc.Width - 2, rc.Height - 1));
+            using (SolidBrush brush = new(highlight))
             {
                 e.Graphics.FillRectangle(brush, rc);
             }
@@ -55,8 +55,8 @@ namespace Contexts
         protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
         {
             Rectangle rc = new(new Point(0, 1), new Size(e.ToolStrip.Size.Width, e.ToolStrip.Size.Height - 2));
-            using Pen pen = new(menu_border_colour, 2);
-            e.Graphics.DrawRectangle(pen, rc);
+            using (Pen pen = new(menu_border_colour, 2))
+                e.Graphics.DrawRectangle(pen, rc);
         }
         protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
@@ -66,28 +66,26 @@ namespace Contexts
     } 
     class GUI : ApplicationContext
     {
-        private NotifyIcon notifyIcon;
-        private ContextMenuStrip contextMenu = new ContextMenuStrip();
-        ToolStripMenuItem port = new ToolStripMenuItem();
-        ToolStripMenuItem volume_sense = new ToolStripMenuItem();
-        ToolStripMenuItem output = new ToolStripMenuItem();
-        ToolStripMenuItem default_audio_output = new ToolStripMenuItem();
-        ToolStripMenuItem title = new();
-        ToolStripMenuItem exit = new();
-        ToolStripMenuItem wallpaper_mode = new();
+        public static NotifyIcon notifyIcon = new();
+        public static Mutex balloon_mutex = new();
+        private readonly ContextMenuStrip contextMenu = new();
+        readonly ToolStripMenuItem port = new();
+        readonly ToolStripMenuItem volume_sense = new();
+        readonly ToolStripMenuItem output = new();
+        readonly ToolStripMenuItem default_audio_output = new();
+        readonly ToolStripMenuItem title = new();
+        readonly ToolStripMenuItem exit = new();
+        readonly ToolStripMenuItem wallpaper_mode = new();
         IEnumerable<CoreAudioDevice>? cad = null;
         public static bool continue_read = true;
         public static bool continue_config = true;
         public static bool continue_media = true;
-
         static Image selected_img = SystemIcons.Exclamation.ToBitmap();
-
         public static Thread read_thread = new(DeviceHandler.Read);
         public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
         public static Thread media_thread = new(DeviceHandler.HandlerSetup);
-
         static DeviceHandler.Oracle_Configuration oracle_Configuration = new();
-        static DeviceHandler.Oracle_Configuration oracle_Config_Old = new();
+        static readonly DeviceHandler.Oracle_Configuration oracle_Config_Old = new();
 
         private GUI()
         {
@@ -95,17 +93,19 @@ namespace Contexts
             string path_icon = icon_paths + "huge.png";
             Image logo_img = SystemIcons.Application.ToBitmap();
             Image exit_symbol = SystemIcons.Error.ToBitmap();
+            Bitmap logo_icon = SystemIcons.Error.ToBitmap();
             try
             {
                 logo_img = Image.FromFile(icon_paths + "small.png");
                 selected_img = Image.FromFile(icon_paths + "Selected.png");
                 exit_symbol = Image.FromFile(icon_paths + "Exit_Symbol.png");
+                logo_icon = (Bitmap)Image.FromFile(path_icon);
             }
             catch (Exception ex)
             {
                 DeviceHandler.WriteLog(ex.ToString());
             }
-            port = new ToolStripMenuItem("Port", null, new EventHandler(OnPortEnter));
+            port = new ToolStripMenuItem("Port", null, new EventHandler(GetPorts));
             volume_sense = new ToolStripMenuItem("Volume Knob Sensitivity", null);
             output = new ToolStripMenuItem("Playback Devices", null);
             exit = new("Exit", exit_symbol, new EventHandler(OnClose));
@@ -118,12 +118,13 @@ namespace Contexts
             default_audio_output.Image = selected_img;
 
 
-            title = new("Thoth's Oracle", null);
-            title.Image = logo_img;
-            title.Font = new Font(title.Font, FontStyle.Bold);
+            title = new("Thoth's Oracle", null)
+            {
+                Image = logo_img,
+                Font = new Font(title.Font, FontStyle.Bold),                
+            };
 
 
-            Bitmap logo_icon = (Bitmap)Bitmap.FromFile(path_icon);
             IntPtr logo_ptr = logo_icon.GetHicon();
             exit.MouseUp += new MouseEventHandler(OnClose);
             contextMenu.Items.AddRange(new ToolStripItem[] { title, port, volume_sense, output, wallpaper_mode, exit });
@@ -168,10 +169,6 @@ namespace Contexts
             }
             DeviceHandler.WriteLog("Wallpaper? " + oracle_Configuration.WallpaperMode);
         }
-        private void OnPortEnter(object? sender, EventArgs args)
-        {
-            GetPorts();
-        }
         private void TopMenuExit(object? sender, EventArgs args)
         {
             ConfigHandler.SaveConfig(oracle_Configuration);
@@ -181,7 +178,7 @@ namespace Contexts
         private void TopMenuClick(object? sender, EventArgs args)
         {
             oracle_Configuration = ConfigHandler.LoadConfig();
-            GetPorts();
+            GetPorts(null, args);
             int wp_mode = oracle_Configuration.WallpaperMode ? 1 : 0;
             int not_wp_mode = !oracle_Configuration.WallpaperMode ? 1 : 0;
             wallpaper_mode.DropDown.Items[wp_mode].Image = selected_img;
@@ -235,7 +232,7 @@ namespace Contexts
             if (dropDown.OwnerItem.Text.Equals("Playback Devices"))
                 GetAudioDevices();
         }
-        private void GetPorts()
+        private void GetPorts(object? sender, EventArgs args)
         {
             try
             {
@@ -250,7 +247,7 @@ namespace Contexts
                     i++;
                 }
             }
-            catch (Win32Exception ex)
+            catch (Exception ex)
             {
                 DeviceHandler.WriteLog(ex.ToString());
             }
@@ -306,15 +303,8 @@ namespace Contexts
             continue_config = false;
             continue_read = false;
             continue_media = false;
-            notifyIcon.Visible = false;
-            if (notifyIcon.ContextMenuStrip != null)
-            {
-                notifyIcon.ContextMenuStrip.AutoClose = true;
-                notifyIcon.ContextMenuStrip.Close();
-            }
             contextMenu.Close();
             contextMenu.Visible = false;
-            notifyIcon.Dispose();
             Dispose();
             ExitThread();
         }

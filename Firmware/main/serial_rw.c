@@ -35,6 +35,7 @@ uint8_t album_cover[IMG_SIZE + RX_BUF_SIZE];//was 256
 bool idle = true;
 
 char name[TEXT_SIZE];
+char jtag_msg[TEXT_SIZE];
 uint16_t name_counter = 0;
 uint32_t img_counter = 0;
 uint32_t song_duration = 1;
@@ -111,14 +112,14 @@ static uint8_t frame_start(void){
 }
 
 //Call this at the end of the data frame to reset counters and go back to idling
-static void frame_end(char *mes){
+static void frame_end(char *end_mes){
     idle = true;
     memset(header_buffer, 0, HEADER_BYTES);
     header = empty_header;
-    char tg[31];
+    char mes[32] = {0};
     //Let host know that we finished, and where from. Location is useful for debugging
-    sprintf(tg, "Finished from: %s", mes);
-    serial_jtag_write(FINISHED_TAG, tg, 31, portDelay);
+    sprintf(mes, "Finished from: %s", end_mes);
+    serial_jtag_write(FINISHED_TAG, mes, 31, portDelay);
 }
 
 //Uh-oh. dump all the data received and wait for quiet period of 250ms to know host is done transmitting
@@ -133,10 +134,10 @@ static void catch_and_release(void){
 
 //Something went wrong with the header. We know more data is on it's way, so lets handle that and reset counters
 static void error_reset(uint8_t erre){
-    char mess[63];
+    char mes[64] = {0};
     //Let host know something went wrong
-    sprintf(mess, "Serial error, clearing cover buffer, error code: %d, tag: %d", erre, header.tag);
-    serial_jtag_write(ERROR_TAG, mess, 63, portDelay);
+    sprintf(mes, "Serial error, clearing cover buffer, error code: %d, tag: %d", erre, header.tag);
+    serial_jtag_write(ERROR_TAG, mes, 63, portDelay);
     memset(album_cover, 0, IMG_SIZE);
     catch_and_release();
     //Ready up for more data, and remind host we just handled an error
@@ -190,7 +191,7 @@ static void process_image(void){
         }
     }
     else{
-        serial_jtag_write(INFO_TAG, "Image packet missed, mutex blocked", 35, portDelay);
+        serial_jtag_write(INFO_TAG, "Image packet missed, mutex blocked\0", 35, portDelay);
     }
 }
 
@@ -211,7 +212,7 @@ static void process_text(void){
 
 //This one is a little different, not a lot of data is sent, so it is all packed into the header itself
 static void process_sys_msg(void){
-    char messy[34];
+    char mes[34] = {0};
     if(header.width != 0){//Let's just make sure the date and month aren't 0. No point in updating to a nonsense date
         //Grab mutex, copy data from the header into the shared fields, then return mutex
         if(xSemaphoreTake(date_time_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
@@ -220,8 +221,8 @@ static void process_sys_msg(void){
             system_time.month = header.width >> 8;//header_buffer[5];
             system_time.year = header.height;
             system_time.seconds = header.duration;
-            sprintf(messy, "Received date: %d/%d/%u", system_time.date, system_time.month, system_time.year);
-            serial_jtag_write(INFO_TAG, messy, 34, portDelay);
+            sprintf(mes, "Received date: %d/%d/%u", system_time.date, system_time.month, system_time.year);
+            serial_jtag_write(INFO_TAG, mes, 34, portDelay);
             xSemaphoreGive(date_time_mutex);
         }
     }
@@ -231,7 +232,7 @@ static void process_sys_msg(void){
 
 //Mostly the same as process_sys_msg but with larger integers. Keeping separate stream simplified the code here, and what host needs to send
 static void process_dur_pos(void){
-    char playing[72];
+    char mes[73] = {0};
     if(xSemaphoreTake(info_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
         memset(song_pos_bytes, 0, DUR_POS_BYTES);
         read_status = usb_serial_jtag_read_bytes(&song_pos_bytes, DUR_POS_BYTES, portDelay);
@@ -250,8 +251,8 @@ static void process_dur_pos(void){
         song_position++;
         //Host sends play status in the frame_header
         song_playing = header.width;
-        sprintf(playing, "Serial received play status: %u pos: %lu duration: %lu", header.width, song_position, song_duration);
-        serial_jtag_write(INFO_TAG, playing, 72, portDelay);
+        sprintf(mes, "Serial received play status: %u pos: %lu duration: %lu", header.width, song_position, song_duration);
+        serial_jtag_write(INFO_TAG, mes, 72, portDelay);
         xSemaphoreGive(info_mutex);
     }
     //We have read the expected number of bytes, or a little more/none (uh-oh). Ready up for new frame and let host know
@@ -262,9 +263,8 @@ static void process_dur_pos(void){
 //Serial writer helper
 //Append provided string of length length to msg_type, then a new line to the end, wait ticks for TX buffer to be available
 void serial_jtag_write(uint8_t msg_type, char *msg, uint16_t length, TickType_t ticks){
-    char jtag_msg[TEXT_SIZE];
     memset(jtag_msg, 0, TEXT_SIZE);
-    sprintf(jtag_msg, "%c%s%c", msg_type, msg, '\n');
+    sprintf(jtag_msg, "%c%s%c", msg_type, msg, 10);
     usb_serial_jtag_write_bytes(jtag_msg, length+2, ticks);
 }
 
@@ -280,15 +280,15 @@ void serial_task(void *pvParameters){
     frame_end("start");
     uint16_t idle_counter = 0;
     //Report the reason for the last restart, useful for debugging
-    char resetted[28];
-    sprintf(resetted, "Last restart caused by: %d", (uint8_t)esp_reset_reason());
-    serial_jtag_write(INFO_TAG, resetted, 28, portDelay);
+    char mes[29] = {0};
+    sprintf(mes, "Last restart caused by: %d", (uint8_t)esp_reset_reason());
+    serial_jtag_write(INFO_TAG, mes, 28, portDelay);
     for(;;){
         //If we're idling, wait for data. When frame_start returns 1, we will no longer be idling
         if(idle){
             if(frame_start() != 1){//something went wrong or no data in buffer
                 if(idle_counter == 0){//Periodically emit idling status message to host
-                    serial_jtag_write(STATUS_TAG, "idling", 7, portDelay);
+                    serial_jtag_write(STATUS_TAG, "idling\0", 7, portDelay);
                 }
                 idle_counter++;
                 idle_counter%= 15;//emit message every ~8s, timing not critical
