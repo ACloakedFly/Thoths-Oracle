@@ -419,6 +419,7 @@ class DeviceHandler{
         Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (uint)DateTime.Now.TimeOfDay.TotalSeconds);
         Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(current_media), Encoding.UTF8.GetBytes(current_media), 0, 0);
         GetThumbnail(thumb_stream);
+        Thread.Sleep(500);
         ResizeThumbnail();
         updating_media = false;
         if (gsmtcs == null)
