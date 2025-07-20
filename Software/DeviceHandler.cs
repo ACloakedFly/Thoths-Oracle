@@ -139,6 +139,7 @@ class DeviceHandler{
     private static readonly ushort serial_tip_timeout = 2000;
     public static async void HandlerSetup()
     {
+        Directory.CreateDirectory(ConfigHandler.wallpapers_path);
         wallpapers = Directory.GetFiles(wallpaper_path).ToList();
         if (debug_log)
             DebugLogs();
@@ -338,12 +339,14 @@ class DeviceHandler{
             WriteLog("No current media session");
             return;
         }
-        WriteLog("Source App changed to: " + session.SourceAppUserModelId);
+        WriteLog("Source App changed to: '" + session.SourceAppUserModelId + "' ");
         if (config.MonitoredProgram != null)
         {
-            if (!config.MonitoredProgram.Contains(session.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase))
+            if (config.MonitoredProgram.Count != 0 && !config.MonitoredProgram.Contains(session.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase))
             {
-                WriteLog("Session does not match selections");
+                WriteLog("Session does not match selections ");
+                foreach (string s in config.MonitoredProgram)
+                    WriteLog("'" + s + "' ");
                 return;
             }
         }
@@ -509,10 +512,10 @@ class DeviceHandler{
             reconnect_mutex.ReleaseMutex();
             return;
         }
-        reconnect_timer.Start();
         serial_tip.icon = ToolTipIcon.Warning;
         serial_tip.timeout = serial_tip_timeout;
         device_connected = false;
+        reconnect_timer.Start();
         string log_message;
         switch (exception)
         {
@@ -530,10 +533,6 @@ class DeviceHandler{
                 serial_tip.title = "Access Denied";
                 log_message = "Access to " + serialPort.PortName + " has been denied by another program. Silence the false idol.";
                 WriteLog(log_message, true, null, serial_tip);
-                break;
-            case TimeoutException:
-                log_message = "Timeout";
-                WriteLog(log_message);
                 break;
             case OperationCanceledException:
                 serial_tip.title = "Oracle Disconnected";
@@ -621,10 +620,11 @@ class DeviceHandler{
             }
             catch (Exception ex)
             {
+                if (ex is TimeoutException)
+                    continue;
                 WriteLog("Exception " + oracle_message);
                 SerialExceptionHandler(ex);
-                if (ex is not TimeoutException)
-                    Thread.Sleep(config.DisconnectedWait);
+                Thread.Sleep(config.DisconnectedWait);
             }
         }
     }
