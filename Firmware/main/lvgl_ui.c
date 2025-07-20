@@ -55,6 +55,7 @@ static sys_time ui_time = {0, 0, 0, 0};
 lv_timer_t *song_time;
 //Bool for checking if song is playing, increment song position when true. Bool for updating song metadata only when text has changed
 static bool song_play = false;
+static bool pos_dirty = false;
 //LVGL points for setting position of bar at the top of the screen
 lv_point_t points[] = {{12,26}, {308,26}};
 
@@ -254,8 +255,9 @@ static void update_timer(lv_timer_t * timer){
     //Store the system minute separately. We don't display the seconds, so let's only update the label on a minute change
     uint8_t sys_min = (uint8_t)((ui_time.seconds/60)%60);
     //Only update the song position if the song is actually playing
-    if(song_play){
+    if(song_play || pos_dirty){
         song_secs++;
+        pos_dirty = false;
         sprintf(song_pos, "%.2u:%.2u:%.2u", (uint8_t)(song_secs/3600), (uint8_t)((song_secs/60)%60), (uint8_t)(song_secs%60));
         lv_label_set_text(ld_pos, song_pos);
         lv_bar_set_value(ld_bar, song_secs, LV_ANIM_ON);
@@ -277,6 +279,7 @@ static void decode_timer(void*v){
         if(position_dirty){
             song_secs = song_position;
             position_dirty = false;
+            pos_dirty = true;
         }        
         xSemaphoreGive(info_mutex);
     }

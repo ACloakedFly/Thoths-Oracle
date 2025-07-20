@@ -26,6 +26,7 @@ using Contexts;
 class ConfigHandler
 {
     public const string default_path = "config.yaml";
+    public const string wallpapers_path = "Wallpapers";
     private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new()
     {
         ComPort = "COM3",
@@ -33,15 +34,20 @@ class ConfigHandler
         ReadTimeout = 1000,
         ConnectionWait = 500,
         ReConnectionWait = 2000,
-        MediaCheck = 500,
-        ConfigCheck = 5000,
+        MediaCheck = 1000,
+        ConfigCheck = 1000,
         OracleReadyWait = 400,
         DisconnectedWait = 4000,
-        VolumeSensitivityOptions = new() {1, 5, 10},
+        VolumeSensitivityOptions = new() { 1, 3, 5 },
         VolumeSensitivity = 5,
         PlaybackDevice = "Default Device",
         Speed = 921600,
         MonitoredProgram = new(),
+        AlbumArtist = false,
+        WallpaperMode = false,
+        WallpaperPeriod = 5,
+        LogContinuous = false,
+
     };
     const string default_config = @"
 #Configuration file
@@ -52,8 +58,8 @@ ComPort: COM3
 VolumeSensitivity: 5
 VolumeSensitivityOptions:
 - 1
+- 3
 - 5
-- 10
 #Playback device can be selected through the menu. Default will listen to OS for device focus. 
 #But if multiple audio devices are used, like mics and multiple speakers, specifying this will force the volume knob to control only that device
 PlaybackDevice: Default Device
@@ -66,6 +72,11 @@ AlbumArtist: true
 MonitoredProgram:
 - MusicBee.exe
 - vlc.exe
+#Wallpaper mode for cycling through images in Wallpapers folder
+WallpaperMode: false
+#How long before image changes in minutes
+WallpaperPeriod: 5
+
 
 #Nitty gritty tuning. These values should be good for most circumstances
 #Speed is unused
@@ -74,7 +85,7 @@ WriteTimeout: 5000
 ReadTimeout: 1000
 ConnectionWait: 500
 ReConnectionWait: 2000
-MediaCheck: 500
+MediaCheck: 1000
 ConfigCheck: 1000
 OracleReadyWait: 400
 DisconnectedWait: 4000
@@ -104,15 +115,13 @@ LogContinuous: false
     {
         try
         {
-            using (var input = File.OpenText(configurationFile))
-            {
-                var deserializerBuilder = new DeserializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance);
+            using var input = File.OpenText(configurationFile);
+            var deserializerBuilder = new DeserializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance);
 
-                var deserializerr = deserializerBuilder.Build();
+            var deserializerr = deserializerBuilder.Build();
 
-                var result = deserializerr.Deserialize<DeviceHandler.Oracle_Configuration>(input);
-                return result;
-            }
+            var result = deserializerr.Deserialize<DeviceHandler.Oracle_Configuration>(input);
+            return result;
         }
         catch (Exception ex)
         {
@@ -137,12 +146,10 @@ LogContinuous: false
                 }
                 line++;
             }
-            using (var output = new StreamWriter(configurationFile))
+            using var output = new StreamWriter(configurationFile);
+            foreach (string s in yamls)
             {
-                foreach (string s in yamls)
-                {
-                    output.Write(s);
-                }
+                output.Write(s);
             }
         }
         catch (Exception ex)
@@ -152,25 +159,27 @@ LogContinuous: false
     }
     public static void ConfigChangeHandler()
     {
+        Directory.CreateDirectory(wallpapers_path);
         using var watcher = new FileSystemWatcher("\\");
-        watcher.NotifyFilter = NotifyFilters.Attributes
-                             | NotifyFilters.CreationTime
-                             | NotifyFilters.DirectoryName
-                             | NotifyFilters.FileName
-                             | NotifyFilters.LastAccess
-                             | NotifyFilters.LastWrite
-                             | NotifyFilters.Security
-                             | NotifyFilters.Size;
+        watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         watcher.Changed += OnChanged;
         watcher.Created += OnChanged;
-        watcher.Deleted += OnDeleted;
-        watcher.Renamed += OnDeleted;
         watcher.Error += OnError;
 
         watcher.Filter = default_path;
         watcher.IncludeSubdirectories = true;
         watcher.EnableRaisingEvents = true;
+
+        using var wallpaper_watcher = new FileSystemWatcher(wallpapers_path);
+        wallpaper_watcher.NotifyFilter = NotifyFilters.LastWrite;
+
+        wallpaper_watcher.Changed += OnWallpapersChanged;
+        wallpaper_watcher.Deleted += OnWallpapersChanged;
+        wallpaper_watcher.Error += OnError;
+
+        wallpaper_watcher.EnableRaisingEvents = true;
+
         while (GUI.continue_config)
         {
             Thread.Sleep(1000);
@@ -182,12 +191,14 @@ LogContinuous: false
         Thread.Sleep(500);
         DeviceHandler.config_changed = true;
     }
-    private static void OnDeleted(object sender, FileSystemEventArgs e)
-    {
-
-    }
     private static void OnError(object sender, ErrorEventArgs e)
     {
-
+        DeviceHandler.WriteLog("FileSystemWatcher error " + e.ToString());
+    }
+    private static void OnWallpapersChanged(object sender, FileSystemEventArgs e)
+    {
+        DeviceHandler.WriteLog("Wallpapers changed " + e.ChangeType);
+        Thread.Sleep(500);
+        DeviceHandler.wallpapers_changed = true;
     }
 }

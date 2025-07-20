@@ -23,12 +23,12 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include "data.h"
 
 //uint8s for storing input commands
-const uint8_t cmd_vol_dn      = CMD_VAL_VOL_DN;
-const uint8_t cmd_vol_up      = CMD_VAL_VOL_UP;
-const uint8_t cmd_mute        = CMD_VAL_MUTE;
-const uint8_t cmd_prev        = CMD_VAL_PREV;
-const uint8_t cmd_play_pause  = CMD_VAL_PLAY_PAUSE;
-const uint8_t cmd_next        = CMD_VAL_NEXT;
+char cmd_vol_dn[2]      = {CMD_VAL_VOL_DN, 0};
+char cmd_vol_up[2]      = {CMD_VAL_VOL_UP, 0};
+char cmd_mute[2]        = {CMD_VAL_MUTE, 0};
+char cmd_prev[2]        = {CMD_VAL_PREV, 0};
+char cmd_play_pause[2]  = {CMD_VAL_PLAY_PAUSE, 0};
+char cmd_next[2]        = {CMD_VAL_NEXT, 0};
 
 //Button config, reused for simplicity
 button_config_t gpio_btn_cfg = {
@@ -133,10 +133,10 @@ void inputs_main(){
         if (xQueueReceive(queue, &event_count, pdMS_TO_TICKS(1000))) {
             //Send command over serial based on rotation direction 
             if(event_count == -1){
-                serial_jtag_write(CMD_TAG, (char*)&cmd_vol_dn, 1, portDelay);
+                serial_jtag_write(CMD_TAG, cmd_vol_dn, 1, portDelay);
             }
             else{
-                serial_jtag_write(CMD_TAG, (char*)&cmd_vol_up, 1, portDelay);
+                serial_jtag_write(CMD_TAG, cmd_vol_up, 1, portDelay);
             }
         }
     }

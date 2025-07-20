@@ -466,7 +466,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "Media Watcher V3-2.kicad_pro",
+    "filename": "Thoth's Oracle PCB.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -523,7 +523,7 @@
       "plot": "",
       "pos_files": "",
       "specctra_dsn": "",
-      "step": "Media Watcher V3-2.step",
+      "step": "Thoth's Oracle PCB.step",
       "svg": "",
       "vrml": ""
     },
