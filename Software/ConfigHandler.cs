@@ -114,15 +114,13 @@ LogContinuous: false
     {
         try
         {
-            using (var input = File.OpenText(configurationFile))
-            {
-                var deserializerBuilder = new DeserializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance);
+            using var input = File.OpenText(configurationFile);
+            var deserializerBuilder = new DeserializerBuilder().WithNamingConvention(PascalCaseNamingConvention.Instance);
 
-                var deserializerr = deserializerBuilder.Build();
+            var deserializerr = deserializerBuilder.Build();
 
-                var result = deserializerr.Deserialize<DeviceHandler.Oracle_Configuration>(input);
-                return result;
-            }
+            var result = deserializerr.Deserialize<DeviceHandler.Oracle_Configuration>(input);
+            return result;
         }
         catch (Exception ex)
         {
@@ -147,12 +145,10 @@ LogContinuous: false
                 }
                 line++;
             }
-            using (var output = new StreamWriter(configurationFile))
+            using var output = new StreamWriter(configurationFile);
+            foreach (string s in yamls)
             {
-                foreach (string s in yamls)
-                {
-                    output.Write(s);
-                }
+                output.Write(s);
             }
         }
         catch (Exception ex)
@@ -163,24 +159,25 @@ LogContinuous: false
     public static void ConfigChangeHandler()
     {
         using var watcher = new FileSystemWatcher("\\");
-        watcher.NotifyFilter = NotifyFilters.Attributes
-                             | NotifyFilters.CreationTime
-                             | NotifyFilters.DirectoryName
-                             | NotifyFilters.FileName
-                             | NotifyFilters.LastAccess
-                             | NotifyFilters.LastWrite
-                             | NotifyFilters.Security
-                             | NotifyFilters.Size;
+        watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         watcher.Changed += OnChanged;
         watcher.Created += OnChanged;
-        watcher.Deleted += OnDeleted;
-        watcher.Renamed += OnDeleted;
         watcher.Error += OnError;
 
         watcher.Filter = default_path;
         watcher.IncludeSubdirectories = true;
         watcher.EnableRaisingEvents = true;
+
+        using var wallpaper_watcher = new FileSystemWatcher("Wallpapers");
+        wallpaper_watcher.NotifyFilter = NotifyFilters.LastWrite;
+
+        wallpaper_watcher.Changed += OnWallpapersChanged;
+        wallpaper_watcher.Deleted += OnWallpapersChanged;
+        wallpaper_watcher.Error += OnError;
+
+        wallpaper_watcher.EnableRaisingEvents = true;
+
         while (GUI.continue_config)
         {
             Thread.Sleep(1000);
@@ -192,12 +189,14 @@ LogContinuous: false
         Thread.Sleep(500);
         DeviceHandler.config_changed = true;
     }
-    private static void OnDeleted(object sender, FileSystemEventArgs e)
-    {
-
-    }
     private static void OnError(object sender, ErrorEventArgs e)
     {
-
+        DeviceHandler.WriteLog("FileSystemWatcher error " + e.ToString());
+    }
+    private static void OnWallpapersChanged(object sender, FileSystemEventArgs e)
+    {
+        DeviceHandler.WriteLog("Wallpapers changed " + e.ChangeType);
+        Thread.Sleep(500);
+        DeviceHandler.wallpapers_changed = true;
     }
 }
