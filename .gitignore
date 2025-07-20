@@ -10,3 +10,5 @@ bin/
 logs/
 obj/
 thumb*
+production/
+*backups/
