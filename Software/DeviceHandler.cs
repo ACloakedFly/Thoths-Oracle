@@ -223,12 +223,13 @@ class DeviceHandler{
     {
         if (direction != 0)
             current_wallpaper += (ushort)direction;
-        if(wallpapers.Count != 0)
+        if (wallpapers.Count != 0)
             current_wallpaper %= (ushort)wallpapers.Count;
+        else
+            return;
         Write_Bytes(ComCodes.DurPos, 8, new byte[8], 0, 1);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
         Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(empty_media), Encoding.UTF8.GetBytes(empty_media), 0, 0);
         ResizeThumbnail(wallpapers[current_wallpaper]);
-        return;
     }
     private static async void OnInitialConnection(object? source, ElapsedEventArgs args)
     {
