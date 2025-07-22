@@ -160,7 +160,7 @@ LogContinuous: false
     public static void ConfigChangeHandler()
     {
         Directory.CreateDirectory(wallpapers_path);
-        using var watcher = new FileSystemWatcher("\\");
+        using FileSystemWatcher watcher = new ("\\");
         watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         watcher.Changed += OnChanged;
@@ -171,7 +171,7 @@ LogContinuous: false
         watcher.IncludeSubdirectories = true;
         watcher.EnableRaisingEvents = true;
 
-        using var wallpaper_watcher = new FileSystemWatcher(wallpapers_path);
+        using FileSystemWatcher wallpaper_watcher = new (wallpapers_path);
         wallpaper_watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         wallpaper_watcher.Changed += OnWallpapersChanged;
