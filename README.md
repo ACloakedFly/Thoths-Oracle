@@ -1,5 +1,5 @@
 # Thoth's Oracle
-USB operated media display/controller for Windows, Linux, MacOS
+USB operated media display/controller for Windows(, Linux, MacOS WIP)
 
 # Features
 
@@ -21,8 +21,8 @@ USB operated media display/controller for Windows, Linux, MacOS
   - Volume control
 - Tiltable screen
 - Brightness control
-- Lightweight companion app
-- Screensaver mode to cycle through local images (WIP)
+- Lightweight companion app (peak RAM usage <80MB, avg <50MB)
+- Screensaver mode to cycle through local images in Wallpaper folder
 - Standard components allowing for custom configuration and ease of assembly
   - Hotswappable MX style or Kailh Choc low-profile style switches
   - 6mm rotary potentiometer and encoder
