@@ -34,7 +34,7 @@ class ConfigHandler
         ReadTimeout = 1000,
         ConnectionWait = 500,
         ReConnectionWait = 2000,
-        MediaCheck = 1000,
+        MediaCheck = 500,
         ConfigCheck = 1000,
         OracleReadyWait = 400,
         DisconnectedWait = 4000,
@@ -65,12 +65,11 @@ VolumeSensitivityOptions:
 PlaybackDevice: Default Device
 #Change this if you want the album artist displayed instead of the artist, or vice versa
 AlbumArtist: true
-#Change which programs Thoth's Oracle listens to.
-#If multiple are provided, whichever currently has focus will be used.
-#If none are provided, any program displaying media to the OS will be used. These options will get messy if multiple programs are fighting for focus
-#I recommend only specifying one program, or programs that won't be run concurrently.
+#Change which programs Thoth's Oracle listens to. Case insenstive.
+#If multiple are provided, their order represents their priority (top is first). Only the highest active program will be used.
+#If none are provided or none listed are found, any program displaying media to the OS will be used. This will get messy if multiple programs are fighting for focus
 MonitoredProgram:
-- MusicBee.exe
+- MusIcbee.exe
 - vlc.exe
 #Wallpaper mode for cycling through images in Wallpapers folder
 WallpaperMode: false
@@ -85,7 +84,7 @@ WriteTimeout: 5000
 ReadTimeout: 1000
 ConnectionWait: 500
 ReConnectionWait: 2000
-MediaCheck: 1000
+MediaCheck: 500
 ConfigCheck: 1000
 OracleReadyWait: 400
 DisconnectedWait: 4000
@@ -138,13 +137,18 @@ LogContinuous: false
             string yaml = serializer.Serialize(config);
             List<string> yamls = yaml.Split('\n').ToList();
             int line = 0;
-            foreach (string s in File.ReadLines(configurationFile))
+            using (StreamReader stream = new (configurationFile))
             {
-                if (s == "" || s.StartsWith('#'))
+                string? ss = stream.ReadLine();
+                while (ss != null)
                 {
-                    yamls.Insert(line, s + "\r");
+                    if (ss == "" || ss.StartsWith('#'))
+                    {
+                        yamls.Insert(line, ss + "\r");
+                    }
+                    line++;
+                    ss = stream.ReadLine();
                 }
-                line++;
             }
             using var output = new StreamWriter(configurationFile);
             foreach (string s in yamls)

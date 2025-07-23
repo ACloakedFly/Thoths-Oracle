@@ -84,8 +84,8 @@ namespace Contexts
         public static Thread read_thread = new(DeviceHandler.Read);
         public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
         public static Thread media_thread = new(DeviceHandler.HandlerSetup);
-        static DeviceHandler.Oracle_Configuration oracle_Configuration = new();
-        static readonly DeviceHandler.Oracle_Configuration oracle_Config_Old = new();
+        static DeviceHandler.Oracle_Configuration oracle_Configuration = new(){MonitoredProgram = new()};
+        static readonly DeviceHandler.Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
 
         private GUI()
         {
@@ -105,15 +105,15 @@ namespace Contexts
             {
                 DeviceHandler.WriteLog(ex.ToString());
             }
-            port = new ToolStripMenuItem("Port", null, new EventHandler(GetPorts));
+            port = new ToolStripMenuItem("Port", null, GetPorts);
             volume_sense = new ToolStripMenuItem("Volume Knob Sensitivity", null);
             output = new ToolStripMenuItem("Playback Devices", null);
-            exit = new("Exit", exit_symbol, new EventHandler(OnClose));
+            exit = new("Exit", exit_symbol, OnClose);
             wallpaper_mode = new("Wallpaper Mode", null);
 
-            wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Disabled", null, new EventHandler(OnWallpaperToggle)));
-            wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Enabled", null, new EventHandler(OnWallpaperToggle)));
-            default_audio_output = new ToolStripMenuItem("Default Device", null, new EventHandler(OnSetAudioDevice));
+            wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Disabled", null, OnWallpaperToggle));
+            wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Enabled", null, OnWallpaperToggle));
+            default_audio_output = new ToolStripMenuItem("Default Device", null, OnSetAudioDevice);
             output.DropDownItems.Add(default_audio_output);
             default_audio_output.Image = selected_img;
 
@@ -137,16 +137,16 @@ namespace Contexts
                 ContextMenuStrip = contextMenu
             };
             notifyIcon.ContextMenuStrip.AutoClose = true;
-            notifyIcon.MouseClick += new MouseEventHandler(TopMenuClick);
-            notifyIcon.ContextMenuStrip.Closed += new ToolStripDropDownClosedEventHandler(TopMenuExit);
-            volume_sense.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
-            volume_sense.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
-            port.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
-            port.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
-            output.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
-            output.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
-            wallpaper_mode.DropDown.MouseEnter += new EventHandler(OnAutoCloseDisable);
-            wallpaper_mode.DropDown.MouseLeave += new EventHandler(OnAutoCloseEnable);
+            notifyIcon.MouseClick += TopMenuClick;
+            notifyIcon.ContextMenuStrip.Closed += TopMenuExit;
+            volume_sense.DropDown.MouseEnter += OnAutoCloseDisable;
+            volume_sense.DropDown.MouseLeave += OnAutoCloseEnable;
+            port.DropDown.MouseEnter += OnAutoCloseDisable;
+            port.DropDown.MouseLeave += OnAutoCloseEnable;
+            output.DropDown.MouseEnter += OnAutoCloseDisable;
+            output.DropDown.MouseLeave += OnAutoCloseEnable;
+            wallpaper_mode.DropDown.MouseEnter += OnAutoCloseDisable;
+            wallpaper_mode.DropDown.MouseLeave += OnAutoCloseEnable;
         }
 
         private void OnWallpaperToggle(object? sender, EventArgs args)
@@ -184,7 +184,7 @@ namespace Contexts
             wallpaper_mode.DropDown.Items[wp_mode].Image = selected_img;
             wallpaper_mode.DropDown.Items[not_wp_mode].Image = null;
             oracle_Config_Old.VolumeSensitivityOptions ??= new List<ushort> { };
-            if (oracle_Configuration.VolumeSensitivityOptions == null || oracle_Config_Old.VolumeSensitivityOptions == null)
+            if (oracle_Configuration.VolumeSensitivityOptions == null)
                 return;
             if (Enumerable.SequenceEqual(oracle_Config_Old.VolumeSensitivityOptions, oracle_Configuration.VolumeSensitivityOptions))
                 return;
@@ -305,6 +305,7 @@ namespace Contexts
             continue_media = false;
             contextMenu.Close();
             contextMenu.Visible = false;
+            notifyIcon.Dispose();
             Dispose();
             ExitThread();
         }

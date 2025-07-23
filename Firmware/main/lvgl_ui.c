@@ -56,6 +56,7 @@ lv_timer_t *song_time;
 //Bool for checking if song is playing, increment song position when true. Bool for updating song metadata only when text has changed
 static bool song_play = false;
 static bool pos_dirty = false;
+static bool dur_dirty = false;
 //LVGL points for setting position of bar at the top of the screen
 lv_point_t points[] = {{12,26}, {308,26}};
 
@@ -197,7 +198,6 @@ static void decode_unicode(){
         for(int i = 0; i < TEXT_SIZE; i += BITS){
             wide_data[i/BITS] = (uint8_t)name[i];
         }
-        song_durs = song_duration;
         //Return the mutex. The rest we can do on our own copies without getting in the way of serial_task
         xSemaphoreGive(info_mutex);
     }
@@ -234,19 +234,6 @@ static void decode_unicode(){
     lv_label_set_text(ld_title, (char*)wide_data);
     lv_label_set_text(ld_album, (char*)(&wide_data[album_i]));
     lv_label_set_text(ld_artist, (char*)(&wide_data[artist_i]));
-    //Zero out song duration array
-    memset(song_dur, 0, 11);
-    //Gotta be careful here, LVGL does not like bars with maximums of 0, so set it to 1 in that case. 
-    if(song_durs != 0){
-        //Construct our duration string by taking the total seconds and converting into hours, minutes component, and seconds component
-        sprintf(song_dur, "%.2u:%.2u:%.2u", (uint8_t)(song_durs/3600), (uint8_t)((song_durs/60)%60), (uint8_t)(song_durs%60));
-        lv_bar_set_range(ld_bar, 0, song_durs);
-    }
-    else{
-        memcpy(song_dur, "00:00:00", 9);
-        lv_bar_set_range(ld_bar, 0, 1);
-    }
-    lv_label_set_text(ld_dur, song_dur);
 }
 
 //Timer for updating song position and date/time
@@ -254,6 +241,21 @@ static void update_timer(lv_timer_t * timer){
     ui_time.seconds++;
     //Store the system minute separately. We don't display the seconds, so let's only update the label on a minute change
     uint8_t sys_min = (uint8_t)((ui_time.seconds/60)%60);
+    if(dur_dirty){
+        dur_dirty = false;
+        memset(song_dur, 0, 11);
+        //Gotta be careful here, LVGL does not like bars with maximums of 0, so set it to 1 in that case. 
+        if(song_durs != 0){
+            //Construct our duration string by taking the total seconds and converting into hours, minutes component, and seconds component
+            sprintf(song_dur, "%.2u:%.2u:%.2u", (uint8_t)(song_durs/3600), (uint8_t)((song_durs/60)%60), (uint8_t)(song_durs%60));
+            lv_bar_set_range(ld_bar, 0, song_durs);
+        }
+        else{
+            memcpy(song_dur, "00:00:00", 9);
+            lv_bar_set_range(ld_bar, 0, 1);
+        }
+        lv_label_set_text(ld_dur, song_dur);
+    }
     //Only update the song position if the song is actually playing
     if(song_play || pos_dirty){
         song_secs++;
@@ -280,7 +282,11 @@ static void decode_timer(void*v){
             song_secs = song_position;
             position_dirty = false;
             pos_dirty = true;
-        }        
+        }
+        if(song_durs != song_duration && song_play){
+            dur_dirty = true;
+            song_durs = song_duration;
+        }   
         xSemaphoreGive(info_mutex);
     }
     if(xSemaphoreTake(date_time_mutex, 0) == pdTRUE){

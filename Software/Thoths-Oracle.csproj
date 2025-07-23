@@ -8,6 +8,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <NoWarn>$(NoWarn);NU1701</NoWarn>
     <ApplicationIcon>Icons_Images\\logo.ico</ApplicationIcon>
+    <Copyright>© 2025 Dominique Negm</Copyright>
+    <Version>1.1.0</Version>
+    <FileVersion>1.6.0</FileVersion>
+    <AssemblyVersion>1.6.2</AssemblyVersion>
+    <Product>Thoth's Oracle</Product>
   </PropertyGroup>
 
   
