@@ -73,6 +73,7 @@ class DeviceHandler{
     static string empty_media = " \n \n \n";
     static string new_media = "";
     static string captured_media = "";
+    static IRandomAccessStreamReference? thumb_stream;
     static bool device_connected = false;
     static bool device_initial_connected = false;
     static uint song_duration = 0, song_position = 0;
@@ -420,12 +421,13 @@ class DeviceHandler{
         };
         info_.Artist = config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist;
         new_media = info_.Title + "\n" + info_.Album + "\n" + info_.Artist + "\n";
-        if (new_media.Equals(captured_media))
+        if (new_media.Equals(captured_media) && media_properties.Thumbnail == thumb_stream)
         {
             media_mutex.Release();
+            queued_media = false;
             return 0;
         }
-        IRandomAccessStreamReference thumb_stream = media_properties.Thumbnail;
+        thumb_stream = media_properties.Thumbnail;
         string? cause = args == null ? " " : args.GetType().ToString();
         cause ??= "";
         captured_media = new_media;
@@ -472,8 +474,11 @@ class DeviceHandler{
             WriteLog("error insufficient data");
             img_exists = false;
         }
-        if(!img_exists)
+        if (!img_exists)
+        {
+            queued_media = true;//Try again at next mediacheck. Hopefully image has been populated by then
             return;
+        }
         IPixelCollection<byte> pixels = img.GetPixels();
         byte[]? bytes = pixels.ToByteArray(PixelMapping.RGB);
         if (bytes == null)
