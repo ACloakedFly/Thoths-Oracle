@@ -64,7 +64,7 @@ VolumeSensitivityOptions:
 #But if multiple audio devices are used, like mics and multiple speakers, specifying this will force the volume knob to control only that device
 PlaybackDevice: Default Device
 #Change this if you want the album artist displayed instead of the artist, or vice versa
-AlbumArtist: true
+AlbumArtist: false
 #Change which programs Thoth's Oracle listens to. Case insenstive.
 #If multiple are provided, their order represents their priority (top is first). Only the highest active program will be used.
 #If none are provided or none listed are found, any program displaying media to the OS will be used. This will get messy if multiple programs are fighting for focus
