@@ -108,7 +108,6 @@ class DeviceHandler{
         public ushort OracleReadyWait { get; set; }
         public ushort DisconnectedWait { get; set; }
         public bool LogContinuous { get; set; }
-
     };
     public static Oracle_Configuration config = new() { MonitoredProgram = new()};
     public static Oracle_Configuration old_config = new() { MonitoredProgram = new()};
@@ -152,8 +151,6 @@ class DeviceHandler{
             if (!config.MonitoredProgram.Contains(gsmtcs.SourceAppUserModelId, StringComparer.OrdinalIgnoreCase))
                 gsmtcs = null;
         }
-        //Gsmtcsm_Current_Session_Changed(gsmtcsm, null);
-        //gsmtcsm.CurrentSessionChanged += Gsmtcsm_Current_Session_Changed;
         GsmtcsSessionsChanged(gsmtcsm, null);
         gsmtcsm.SessionsChanged += GsmtcsSessionsChanged;
 
@@ -345,7 +342,6 @@ class DeviceHandler{
             sessions.Add(session.SourceAppUserModelId);
 
         }
-
         int index = -1;
         foreach (string monitored_session in config.MonitoredProgram)
         {
@@ -374,11 +370,6 @@ class DeviceHandler{
     }
     private static void PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
     {
-        if (sender != gsmtcs)
-        {
-            //WriteLog("Playback sender: " + sender.SourceAppUserModelId + " GSMTCS " + gsmtcs.SourceAppUserModelId);
-            return;
-        }
         GlobalSystemMediaTransportControlsSessionPlaybackInfo playbackInfo = sender.GetPlaybackInfo();
         GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties = sender.GetTimelineProperties();
         song_duration = (uint)timelineProperties.EndTime.TotalSeconds;
@@ -576,9 +567,8 @@ class DeviceHandler{
     private static void SerialSetup()
     {
         if (serialPort.IsOpen)
-        {
             serialPort.Close();
-        }
+
         serialPort.PortName = config.ComPort;
         serialPort.BaudRate = (int)config.Speed;
         serialPort.Parity = Parity.Even;
@@ -723,10 +713,6 @@ class DeviceHandler{
             {
                 WriteLog("No current media session and not in wallpaper mode :(");
             }
-        }
-        else
-        {
-            //WriteLog(serialPort.ReadLine());
         }
     }
     private static void Write_Bytes(byte tag, uint length, byte[]? data, ushort width, ushort height, uint dur = 0)
