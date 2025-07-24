@@ -72,6 +72,7 @@ class DeviceHandler{
     }
     static string empty_media = " \n \n \n";
     static string new_media = "";
+    static ulong prev_playback_info = 0;
     static string captured_media = "";
     static IRandomAccessStreamReference? thumb_stream;
     static bool device_connected = false;
@@ -375,10 +376,10 @@ class DeviceHandler{
         GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties = sender.GetTimelineProperties();
         song_duration = (uint)timelineProperties.EndTime.TotalSeconds;
         song_position = (uint)timelineProperties.Position.TotalSeconds;
-            
-        byte byt = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
+        ulong new_playback_info = 0;
+        byte playing_byte = playbackInfo.PlaybackStatus.ToString().Equals("Paused") ? (byte)0 : (byte)1;
         //Firefox emits the last played time when paused, instead of current time of pause.
-        if (sender.SourceAppUserModelId.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase) && byt == 0)
+        if (sender.SourceAppUserModelId.Equals("firefox.exe", StringComparison.OrdinalIgnoreCase) && playing_byte == 0)
         {
             song_duration = 0;
             reset_pos = 0;
@@ -386,9 +387,16 @@ class DeviceHandler{
         byte[] bytes = BitConverter.GetBytes(song_position).ToArray().Concat(BitConverter.GetBytes(song_duration).ToArray()).ToArray();
         string? cause = args == null ? " " : args.GetType().ToString();
         cause ??= "";
-        WriteLog("We playing? " + byt + " we resetting? " + reset_pos + " Song position " + song_position + "/" + song_duration + "  Cause: " + cause + " PB status "
+        new_playback_info = song_duration + song_position + playing_byte;
+        if (new_playback_info == prev_playback_info)
+        {
+            reset_pos = 0;
+            return;
+        }
+        prev_playback_info = new_playback_info;
+        WriteLog("We playing? " + playing_byte + " we resetting? " + reset_pos + " Song position " + song_position + "/" + song_duration + "  Cause: " + cause + " PB status "
          + playbackInfo.PlaybackStatus.ToString());
-        Write_Bytes(ComCodes.DurPos, (uint)bytes.Length, bytes, byt, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
+        Write_Bytes(ComCodes.DurPos, (uint)bytes.Length, bytes, playing_byte, reset_pos);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
         //don't reset position when (duration == 0 and reset pos == 0)
         reset_pos = 0;
     }
