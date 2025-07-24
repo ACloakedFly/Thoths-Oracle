@@ -32,3 +32,28 @@
 | 1 | Oracle_screen.stl |
 | 2 | Oracle_thumbscrew.stl |
 | 2 | Oracle_thumbscrew_cap.stl |
+
+
+# Assembly
+
+## 3D printing Instructions
+
+All STLs are in the correct orientation for printing. The Oracle_inputs STL is the only one that needs supports. Any stiff material should work fine (I used PLA).
+Here are the support settings I have found to work well
+![Support_settings](https://github.com/ACloakedFly/Thoths-Oracle/blob/dev/Images/Support_settings.png)
+
+## PCB Assembly Instructions
+
+##  Firmware Flashing Instructions
+
+- Connect your ESP32 to your computer with a USB cable, then find out which port it is connected to either using Thoth's Oracle Software or through your OS.
+- Download the ESP flashing tool from [here](https://docs.espressif.com/projects/esp-test-tools/en/latest/esp32s3/production_stage/tools/flash_download_tool.html), then extract the folder.
+- Download and extract the latest release of Thoths_Oracle_Firmware. Place all three files into the bin folder of the flashing tool.
+- Run the flashing tool exe.
+- Set the chip type to ESP32-S3, Workflow to Develop, and Load mode to UART, then click OK.
+- Set up the next screen according to the screenshot below, ensuring the COM matches the port your ESP32 is connected to.
+- Press start and let the tool finish.
+- The tool does not restart the ESP32, so if you are doing this when the Oracle is assembled, disconnect and reconnect the USB cable and it should start displaying. 
+  
+![flashing_instructions](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Flash%20tool%20configuration.png)
+
