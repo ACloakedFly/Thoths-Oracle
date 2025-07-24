@@ -34,17 +34,21 @@
 | 2 | Oracle_thumbscrew_cap.stl |
 
 
-# Assembly
+# Shell Instructions
 
-## 3D printing Instructions
+## 3D Printing
 
 All STLs are in the correct orientation for printing. The Oracle_inputs STL is the only one that needs supports. Any stiff material should work fine (I used PLA).
 Here are the support settings I have found to work well
 ![Support_settings](https://github.com/ACloakedFly/Thoths-Oracle/blob/dev/Images/Support_settings.png)
 
-## PCB Assembly Instructions
+## Preparing Your Prints
 
-##  Firmware Flashing Instructions
+# PCB Assembly Instructions
+
+# Final Assembly Instructions
+
+# Firmware Flashing Instructions
 
 - Connect your ESP32 to your computer with a USB cable, then find out which port it is connected to either using Thoth's Oracle Software or through your OS.
 - Download the ESP flashing tool from [here](https://docs.espressif.com/projects/esp-test-tools/en/latest/esp32s3/production_stage/tools/flash_download_tool.html), then extract the folder.
