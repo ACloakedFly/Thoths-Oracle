@@ -35,7 +35,7 @@ USB operated media display/controller for Windows(, Linux, MacOS WIP)
 
 # Make your own!
 
-Instructions for each section are in their respective folder. Final assembly is in the Shell folder.
+Instructions for each section are in their respective folder. Final assembly is in the Shell folder. Consult the BOM for all the components.
 
 # How it works
 
