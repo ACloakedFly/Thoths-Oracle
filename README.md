@@ -35,7 +35,7 @@ USB operated media display/controller for Windows(, Linux, MacOS WIP)
 
 # Make your own!
 
-Instructions for each section are in their respective folder. Final assembly is in the Shell folder. Consult the BOM for all the components.
+Instructions for each section are in their respective folder. Consult BOM and Assembly to get started.
 
 # How it works
 
@@ -86,7 +86,7 @@ Someone ask me something, please.
 
 # Installation
 
-Companion app is provided as portable application that doesn't need installation.
+Companion app is provided as portable application that doesn't need installation. Just download and extract the software file for your system wherever you want and run it!
 
 ## Instructions for making app launch on startup (Section WIP)
 
