@@ -12,3 +12,4 @@ obj/
 thumb*
 production/
 *backups/
+*.FCBak
