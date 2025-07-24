@@ -2606,7 +2606,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 88.9) (xy 34.29 88.9)
+			(xy 22.86 88.9) (xy 34.29 88.9)
 		)
 		(stroke
 			(width 0)
@@ -2966,7 +2966,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 83.82) (xy 36.83 83.82)
+			(xy 22.86 83.82) (xy 36.83 83.82)
 		)
 		(stroke
 			(width 0)
@@ -3026,7 +3026,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 96.52) (xy 30.48 96.52)
+			(xy 22.86 96.52) (xy 30.48 96.52)
 		)
 		(stroke
 			(width 0)
@@ -3096,7 +3096,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 78.74) (xy 39.37 78.74)
+			(xy 22.86 78.74) (xy 39.37 78.74)
 		)
 		(stroke
 			(width 0)
@@ -3196,7 +3196,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 93.98) (xy 31.75 93.98)
+			(xy 22.86 93.98) (xy 31.75 93.98)
 		)
 		(stroke
 			(width 0)
@@ -3436,7 +3436,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 91.44) (xy 33.02 91.44)
+			(xy 22.86 91.44) (xy 33.02 91.44)
 		)
 		(stroke
 			(width 0)
@@ -3536,7 +3536,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 86.36) (xy 35.56 86.36)
+			(xy 22.86 86.36) (xy 35.56 86.36)
 		)
 		(stroke
 			(width 0)
@@ -3546,7 +3546,7 @@
 	)
 	(wire
 		(pts
-			(xy 29.21 81.28) (xy 38.1 81.28)
+			(xy 22.86 81.28) (xy 38.1 81.28)
 		)
 		(stroke
 			(width 0)
@@ -4540,7 +4540,7 @@
 	)
 	(symbol
 		(lib_id "Connector:Conn_01x08_Pin")
-		(at 24.13 86.36 0)
+		(at 27.94 88.9 180)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -4549,23 +4549,25 @@
 		(fields_autoplaced yes)
 		(uuid "52f48b11-72da-402a-9253-8c687137df60")
 		(property "Reference" "J3"
-			(at 24.765 73.66 0)
+			(at 29.21 86.3599 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify right)
 			)
 		)
 		(property "Value" "Display"
-			(at 24.765 76.2 0)
+			(at 29.21 88.8999 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify right)
 			)
 		)
-		(property "Footprint" "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Vertical"
-			(at 24.13 86.36 0)
+		(property "Footprint" "Connector_PinSocket_2.54mm:PinSocket_1x08_P2.54mm_Horizontal"
+			(at 27.94 88.9 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4574,7 +4576,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 24.13 86.36 0)
+			(at 27.94 88.9 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4583,7 +4585,7 @@
 			)
 		)
 		(property "Description" "Generic connector, single row, 01x08, script generated"
-			(at 24.13 86.36 0)
+			(at 27.94 88.9 0)
 			(effects
 				(font
 					(size 1.27 1.27)
