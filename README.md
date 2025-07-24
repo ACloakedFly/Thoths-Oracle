@@ -1,5 +1,8 @@
 # Thoth's Oracle
+
 USB operated media display/controller for Windows(, Linux, MacOS WIP)
+![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4854.JPG)
+![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4855.JPG)
 
 # Features
 
