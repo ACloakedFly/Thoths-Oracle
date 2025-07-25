@@ -26,7 +26,6 @@ using ImageMagick;
 using AudioSwitcher.AudioApi.CoreAudio;
 using AudioSwitcher.AudioApi;
 using Contexts;
-using System.Timers;
 using System.Text;
 using System.Runtime.InteropServices;
 using Windows.System;
