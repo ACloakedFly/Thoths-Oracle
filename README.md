@@ -92,7 +92,6 @@ Companion app is provided as portable application that doesn't need installation
 
 ### Windows
 - Right click on .exe and select 'Create shortcut'
-- Right click on Windows Start button on the task bar and select run. Paste shell:startup into the field then click OK to get to the startup folder.
-- Copy the shortcut into startup folder.
+- Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 
 # Support Me
