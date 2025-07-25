@@ -30,6 +30,14 @@ class ConfigHandler
     private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new()
     {
         ComPort = "COM3",
+        VolumeSensitivity = 5,
+        VolumeSensitivityOptions = new() { 1, 3, 5 },
+        PlaybackDevice = "Default Device",
+        AlbumArtist = false,
+        MonitoredProgram = new() {  "vlc.exe" },
+        WallpaperMode = false,
+        WallpaperPeriod = 5,
+        Speed = 921600,
         WriteTimeout = 5000,
         ReadTimeout = 1000,
         ConnectionWait = 500,
@@ -38,24 +46,17 @@ class ConfigHandler
         ConfigCheck = 1000,
         OracleReadyWait = 400,
         DisconnectedWait = 4000,
-        VolumeSensitivityOptions = new() { 1, 3, 5 },
-        VolumeSensitivity = 5,
-        PlaybackDevice = "Default Device",
-        Speed = 921600,
-        MonitoredProgram = new(),
-        AlbumArtist = false,
-        WallpaperMode = false,
-        WallpaperPeriod = 5,
         LogContinuous = false,
 
     };
     const string default_config = @"
+
 #Configuration file
 
 #Port can be found in the system tray menu or through Device Manager on windows.
 ComPort: COM3
 #Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu too
-VolumeSensitivity: 5
+VolumeSensitivity: 3
 VolumeSensitivityOptions:
 - 1
 - 3
@@ -69,7 +70,7 @@ AlbumArtist: false
 #If multiple are provided, their order represents their priority (top is first). Only the highest active program will be used.
 #If none are provided or none listed are found, any program displaying media to the OS will be used. This will get messy if multiple programs are fighting for focus
 MonitoredProgram:
-- MusIcbee.exe
+- MusIcBEe.exe
 - vlc.exe
 #Wallpaper mode for cycling through images in Wallpapers folder
 WallpaperMode: false
@@ -90,6 +91,7 @@ OracleReadyWait: 400
 DisconnectedWait: 4000
 
 LogContinuous: false
+
     ";
     private static void ExceptionHandler(Exception exception)
     {
@@ -193,7 +195,7 @@ LogContinuous: false
     {
         DeviceHandler.WriteLog("Config changed");
         Thread.Sleep(500);
-        DeviceHandler.config_changed = true;
+        GUI.media_writer_queue.TryEnqueue(DeviceHandler.GeneralSetup);
     }
     private static void OnError(object sender, ErrorEventArgs e)
     {
@@ -203,6 +205,6 @@ LogContinuous: false
     {
         DeviceHandler.WriteLog("Wallpapers changed " + e.ChangeType);
         Thread.Sleep(500);
-        DeviceHandler.wallpapers_changed = true;
+        GUI.media_writer_queue.TryEnqueue(DeviceHandler.NewWallpaper);
     }
 }

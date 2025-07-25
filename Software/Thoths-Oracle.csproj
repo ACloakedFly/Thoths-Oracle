@@ -19,7 +19,7 @@
   <ItemGroup>
     <PackageReference Include="AudioSwitcher.AudioApi" Version="4.0.0-alpha5" />
     <PackageReference Include="AudioSwitcher.AudioApi.CoreAudio" Version="4.0.0-alpha5" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="13.8.0" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.7.0" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />

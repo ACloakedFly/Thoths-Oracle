@@ -21,7 +21,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 using System.IO.Ports;
 using AudioSwitcher.AudioApi.CoreAudio;
 using AudioSwitcher.AudioApi;
-using System.ComponentModel;
+using Windows.System;
 
 namespace Contexts
 {
@@ -83,8 +83,8 @@ namespace Contexts
         static Image selected_img = SystemIcons.Exclamation.ToBitmap();
         public static Thread read_thread = new(DeviceHandler.Read);
         public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
-        public static Thread media_thread = new(DeviceHandler.HandlerSetup);
-        static DeviceHandler.Oracle_Configuration oracle_Configuration = new(){MonitoredProgram = new()};
+        public static DispatcherQueue media_writer_queue = DispatcherQueue.GetForCurrentThread();
+        static DeviceHandler.Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
         static readonly DeviceHandler.Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
 
         private GUI()
@@ -313,7 +313,8 @@ namespace Contexts
         [STAThread]
         public static void Main(string[] args)
         {
-            media_thread.Start();
+            media_writer_queue = DispatcherQueueController.CreateOnDedicatedThread().DispatcherQueue;
+            media_writer_queue.TryEnqueue(DeviceHandler.HandlerSetup);
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.Run(new GUI());
         }

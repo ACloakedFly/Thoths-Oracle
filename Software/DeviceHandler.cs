@@ -29,7 +29,9 @@ using Contexts;
 using System.Timers;
 using System.Text;
 using System.Runtime.InteropServices;
-class DeviceHandler{
+using Windows.System;
+class DeviceHandler
+{
     private static class ComCodes
     {
         public const byte Image = 1;
@@ -45,12 +47,12 @@ class DeviceHandler{
     }
     private static class InputCodes
     {
-        public const byte VolumeDown = 1; 
-        public const byte VolumeUp = 2; 
-        public const byte Mute = 3; 
-        public const byte PreviousTrack = 4; 
-        public const byte PlayPause = 5; 
-        public const byte NextTrack = 6; 
+        public const byte VolumeDown = 1;
+        public const byte VolumeUp = 2;
+        public const byte Mute = 3;
+        public const byte PreviousTrack = 4;
+        public const byte PlayPause = 5;
+        public const byte NextTrack = 6;
     }
     public static CoreAudioDevice? playback_device;
     static bool queued_media = false;
@@ -75,12 +77,13 @@ class DeviceHandler{
     static ulong prev_playback_info = 0;
     static string captured_media = "";
     static IRandomAccessStreamReference? thumb_stream;
+    //static Windows.Storage.Streams.Buffer thumb_buffer = new(8000000);
     static bool device_connected = false;
     static bool device_initial_connected = false;
     static uint song_duration = 0, song_position = 0;
     static ushort reset_pos = 0;
     static string logs = "log_", log_dir = "logs\\";
-    const string wallpaper_path = "Wallpapers\\"; 
+    const string wallpaper_path = "Wallpapers\\";
     static SerialPort serialPort = new();
     public static bool config_changed = false;
     static bool img_exists = false;
@@ -111,22 +114,15 @@ class DeviceHandler{
         public ushort DisconnectedWait { get; set; }
         public bool LogContinuous { get; set; }
     };
-    public static Oracle_Configuration config = new() { MonitoredProgram = new()};
-    public static Oracle_Configuration old_config = new() { MonitoredProgram = new()};
-    private static System.Timers.Timer reconnect_timer = new();
-    private static System.Timers.Timer connected_timer = new();
-    private static System.Timers.Timer media_change_timer = new();
-    private static System.Timers.Timer config_timer = new();
-    private static System.Timers.Timer wallpaper_timer = new();
+    public static Oracle_Configuration config = new() { MonitoredProgram = new() };
+    public static Oracle_Configuration old_config = new() { MonitoredProgram = new() };
+    private static DispatcherQueueTimer reconnect_timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+    private static DispatcherQueueTimer connected_timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+    private static DispatcherQueueTimer media_change_timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
+    private static DispatcherQueueTimer wallpaper_timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
     private static List<string> wallpapers = new();
     private static ushort current_wallpaper = 0;
-    private static sbyte set_wallpaper = 0;
-    public static bool wallpapers_changed;
-    private static Mutex wall_mutex = new();
-    private static readonly int ping_mutex_wait = 1;
     private static readonly int reconnect_mutex_wait = 500;
-    private static readonly int wall_mutex_wait = 1000;
-    private static readonly int ms_to_min = 60 * 1000;
     private static Mutex reconnect_mutex = new();
     private static SemaphoreSlim media_mutex = new(1, 1);
     public class BalloonTip
@@ -137,16 +133,18 @@ class DeviceHandler{
     }
     private static BalloonTip serial_tip = new();
     private static readonly ushort serial_tip_timeout = 2000;
-    public static async void HandlerSetup()
+    private static GlobalSystemMediaTransportControlsSessionManager? gsmtcsm; 
+    public static void HandlerSetup()
     {
+        config = ConfigHandler.LoadConfig();
         Directory.CreateDirectory(ConfigHandler.wallpapers_path);
         wallpapers = Directory.GetFiles(wallpaper_path).ToList();
         if (debug_log)
             DebugLogs();
         GeneralSetup();
         GUI.read_thread.Start();
-        GUI.config_thread.Start();
-        GlobalSystemMediaTransportControlsSessionManager gsmtcsm = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        
+        gsmtcsm = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().GetAwaiter().GetResult();
         gsmtcs = gsmtcsm.GetCurrentSession();
         if (gsmtcs != null && config.MonitoredProgram.Count > 0)
         {
@@ -156,74 +154,75 @@ class DeviceHandler{
         GsmtcsSessionsChanged(gsmtcsm, null);
         gsmtcsm.SessionsChanged += GsmtcsSessionsChanged;
 
-        media_change_timer = new System.Timers.Timer(config.MediaCheck);
-        media_change_timer.Elapsed += OnMediaCheck;
-        media_change_timer.AutoReset = true;
+        media_change_timer = GUI.media_writer_queue.CreateTimer();
+        media_change_timer.Interval = new TimeSpan(0, 0, 0, 0, config.MediaCheck);
+        media_change_timer.IsRepeating = true;
+        media_change_timer.Tick += MediaCheck;
 
-        wallpaper_timer = new System.Timers.Timer(config.WallpaperPeriod * ms_to_min);
-        wallpaper_timer.Elapsed += WallpaperTimer;
-        wallpaper_timer.AutoReset = true;
+        wallpaper_timer = GUI.media_writer_queue.CreateTimer();
+        wallpaper_timer.Tick += WallpaperTimer;
+        wallpaper_timer.Interval = new TimeSpan(0, 0, 0, 0, config.WallpaperPeriod);
+        wallpaper_timer.IsRepeating = true;
 
         if (!config.WallpaperMode)
             media_change_timer.Start();
         else
             wallpaper_timer.Start();
         //Initialize timer to check media info is current on initial connection of device and reconnects
-        connected_timer = new System.Timers.Timer(config.ConnectionWait);
-        connected_timer.Elapsed += OnInitialConnection;
-        connected_timer.AutoReset = true;
+        connected_timer = GUI.media_writer_queue.CreateTimer();
+        connected_timer.Interval = new TimeSpan(0, 0, 0, 0, config.ConnectionWait);
+        connected_timer.Tick += OnInitialConnection;
+        connected_timer.IsRepeating = true;
         connected_timer.Start();
         //Initialize timer for reconnecting to Oracle on disconnect
-        reconnect_timer = new System.Timers.Timer(config.ReConnectionWait);
-        reconnect_timer.Elapsed += OnReConnection;
-        reconnect_timer.AutoReset = true;
-        if(!device_connected)
+        reconnect_timer = GUI.media_writer_queue.CreateTimer();
+        reconnect_timer.Interval = new TimeSpan(0, 0, 0, 0, config.ReConnectionWait);
+        reconnect_timer.Tick += OnReConnection;
+        reconnect_timer.IsRepeating = true;
+        if (!device_connected)
             reconnect_timer.Start();
-        //Initialize timer to check if config.yaml has changed
-        config_timer = new System.Timers.Timer(config.ConfigCheck);
-        config_timer.Elapsed += OnConfigCheck;
-        config_timer.AutoReset = true;
-        config_timer.Start();
-        //serial thread superloop
-        while (GUI.continue_media)
-        {
-            Thread.Sleep(100);
-            if (!wall_mutex.WaitOne(10))
-                continue;
-            if (wallpapers_changed)
-            {
-                wallpapers_changed = false;
-                wallpapers = Directory.GetFiles(wallpaper_path).ToList();
-            }
-            if (set_wallpaper == 0)
-            {
-                wall_mutex.ReleaseMutex();
-                continue;
-            }
-            else if (set_wallpaper == 2)
-            {
-                set_wallpaper = 0;
-            }
-            OnWallpaperChange(set_wallpaper);
+        GUI.config_thread.Start();
+    }
+
+    private static void MediaCheck(DispatcherQueueTimer timer, object sender)
+    {
+        if (gsmtcs == null)
+            return;
+        if (config.WallpaperMode || !queued_media || !device_connected)
+            return;
+        WriteLog("Media be checking queued? " + queued_media + " connected? " + device_connected);
+        Update_Media(gsmtcs, null);
+    }
+
+    private static void IncrementWallpaper()
+    {
+        OnWallpaperChange();
+    }
+    private static void DecrementWallpaper()
+    {
+        OnWallpaperChange(-1);
+    }
+    public static void NewWallpaper()
+    {
+        wallpapers = Directory.GetFiles(wallpaper_path).ToList();
+        foreach (string s in wallpapers)
+            WriteLog("Found img " + s);
+    }
+
+    private static void WallpaperPlayPause()
+    {
+        if (wallpaper_timer.IsRunning)
             wallpaper_timer.Stop();
+        else
             wallpaper_timer.Start();
-            set_wallpaper = 0;
-            wall_mutex.ReleaseMutex();
-        }
-        //Stop timers if application exit is requested
-        media_change_timer.Stop();
-        reconnect_timer.Stop();
-        connected_timer.Stop();
-        config_timer.Stop();
     }
-    private static void WallpaperTimer(object? source, ElapsedEventArgs args)
+    private static void WallpaperTimer(DispatcherQueueTimer timer, object sender)
     {
-        OnWallpaperChange(1);
+        OnWallpaperChange();
     }
-    private static void OnWallpaperChange(sbyte direction)
+    private static void OnWallpaperChange(sbyte direction = 1)
     {
-        if (direction != 0)
-            current_wallpaper += (ushort)direction;
+        current_wallpaper += (ushort)direction;
         if (wallpapers.Count != 0)
             current_wallpaper %= (ushort)wallpapers.Count;
         else
@@ -232,34 +231,19 @@ class DeviceHandler{
         Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(empty_media), Encoding.UTF8.GetBytes(empty_media), 0, 0);
         ResizeThumbnail(wallpapers[current_wallpaper]);
     }
-    private static async void OnInitialConnection(object? source, ElapsedEventArgs args)
+    private static void OnInitialConnection(DispatcherQueueTimer timer, object sender)
     {
         if (!device_initial_connected || gsmtcs == null || config.WallpaperMode)
             return;
         device_initial_connected = false;
-        await Update_Media(gsmtcs, null);
+        Update_Media(gsmtcs, null);
         connected_timer.Stop();
     }
-    private static void OnReConnection(object? source, ElapsedEventArgs args)
+    private static void OnReConnection(DispatcherQueueTimer timer, object sender)
     {
         if (device_connected)
             return;
         SerialSetup();
-    }
-    private static async void OnMediaCheck(object? source, ElapsedEventArgs args)
-    {
-        if (gsmtcs == null)
-            return;
-        if (config.WallpaperMode || (!queued_media && device_connected))
-            return;
-        await Update_Media(gsmtcs, null);
-    }
-    private static void OnConfigCheck(object? source, ElapsedEventArgs args)
-    {
-        if (!config_changed)
-            return;
-        config_changed = false;
-        GeneralSetup();
     }
     private static void DebugLogs()
     {
@@ -300,7 +284,7 @@ class DeviceHandler{
 
     public static void GeneralSetup()
     {
-        config = new Oracle_Configuration() { MonitoredProgram = new()};
+        config = new Oracle_Configuration() { MonitoredProgram = new() };
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
         if (config.PlaybackDevice != null)
         {
@@ -314,28 +298,24 @@ class DeviceHandler{
         if (!old_config.ComPort.Equals(config.ComPort))
             SerialSetup();
         old_config = config;
-        if (!wall_mutex.WaitOne(wall_mutex_wait))
-            return;
         if (config.WallpaperMode)
         {
-            set_wallpaper = 2;
-            wallpaper_timer.Interval = config.WallpaperPeriod * ms_to_min;
+            wallpaper_timer.Interval = new TimeSpan(0, config.WallpaperPeriod, 0);
+            OnWallpaperChange(0);
             wallpaper_timer.Start();
             media_change_timer.Stop();
         }
         else
         {
-            media_change_timer.Interval = config.MediaCheck;
+            media_change_timer.Interval = new TimeSpan(0, config.MediaCheck, 0);
             new_media = "";
             wallpaper_timer.Stop();
             media_change_timer.Start();
         }
-        wall_mutex.ReleaseMutex();
     }
-    private static async void GsmtcsSessionsChanged(GlobalSystemMediaTransportControlsSessionManager manager, SessionsChangedEventArgs? args)
+    private static void GsmtcsSessionsChanged(GlobalSystemMediaTransportControlsSessionManager manager, SessionsChangedEventArgs? args)
     {
         List<string> sessions = new();
-        GlobalSystemMediaTransportControlsSession new_session = manager.GetCurrentSession();
         IReadOnlyList<GlobalSystemMediaTransportControlsSession> session_list = manager.GetSessions();
         WriteLog("Active sessions");
         foreach (var session in session_list)
@@ -345,6 +325,7 @@ class DeviceHandler{
 
         }
         int index = -1;
+        GlobalSystemMediaTransportControlsSession new_session = manager.GetCurrentSession();
         foreach (string monitored_session in config.MonitoredProgram)
         {
             index = sessions.FindIndex(x => x.Equals(monitored_session, StringComparison.OrdinalIgnoreCase));
@@ -354,7 +335,7 @@ class DeviceHandler{
                 break;
             }
         }
-        if (new_session == previous_control_session)
+        if (previous_control_session != null && new_session.SourceAppUserModelId.Equals(previous_control_session.SourceAppUserModelId))
             return;
         if (previous_control_session != null)
         {
@@ -368,7 +349,7 @@ class DeviceHandler{
         reset_pos = 1;
         WriteLog("Adding new session " + new_session.SourceAppUserModelId + "  | Media changed from session event");
         gsmtcs = new_session;
-        await Update_Media(gsmtcs, null);
+        Update_Media(gsmtcs, null);
     }
     private static void PlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
     {
@@ -400,7 +381,7 @@ class DeviceHandler{
         //don't reset position when (duration == 0 and reset pos == 0)
         reset_pos = 0;
     }
-    private static async Task<int> Update_Media(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
+    private static int Update_Media(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
     {
         if (gsmtcs == null)
             return 0;
@@ -412,7 +393,7 @@ class DeviceHandler{
         }
         try
         {
-            media_properties = await sender.TryGetMediaPropertiesAsync();
+            media_properties = sender.TryGetMediaPropertiesAsync().GetAwaiter().GetResult();
         }
         catch (COMException ex)
         {
@@ -432,7 +413,7 @@ class DeviceHandler{
         if (new_media.Equals(captured_media) && media_properties.Thumbnail == thumb_stream)
         {
             media_mutex.Release();
-            queued_media = false;
+            //queued_media = false;
             return 0;
         }
         thumb_stream = media_properties.Thumbnail;
@@ -443,26 +424,29 @@ class DeviceHandler{
         queued_media = false;
         Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (uint)DateTime.Now.TimeOfDay.TotalSeconds);
         Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(new_media), Encoding.UTF8.GetBytes(new_media), 0, 0);
+        WriteLog("Done writing info");
         GetThumbnail(thumb_stream);
         Thread.Sleep(500);
         ResizeThumbnail();
         PlaybackInfoChanged(gsmtcs, null);
+        
         media_mutex.Release();
         return 0;
     }
 
-    private static async void MediaChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
+    private static void MediaChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
     {
         if (config.WallpaperMode || (!config.WallpaperMode && sender != gsmtcs))
             return;
         reset_pos = 1;
-        await Update_Media(sender, args);
+        Update_Media(sender, args);
     }
     private static void ResizeThumbnail(string thumb_path = "thumb.jpg")
     {
         WriteLog("Resize");
         MagickImage img = new();
-        try{
+        try
+        {
             img = new MagickImage(thumb_path);
             //Oracle will only accept image that is 304 x 304 pixels
             MagickGeometry size = new(304, 304);
@@ -470,16 +454,23 @@ class DeviceHandler{
             img_exists = true;
             img.Resize(size);
             // Add padding
-            int imageSize = Math.Max(img.Width, img.Height);
-            img.Extent(imageSize, imageSize, Gravity.Center, MagickColors.Black);
+            uint imageSize = Math.Max(img.Width, img.Height);
+            img.Extent(new MagickGeometry(imageSize, imageSize), Gravity.Center, MagickColors.Black);
             img.Write("thumby.jpg");
         }
-        catch (MagickFileOpenErrorException){
+        catch (MagickFileOpenErrorException)
+        {
             WriteLog("error opening file");
             img_exists = false;
         }
-        catch (MagickCorruptImageErrorException){
+        catch (MagickCorruptImageErrorException)
+        {
             WriteLog("error insufficient data");
+            img_exists = false;
+        }
+        catch (MagickBlobErrorException)
+        {
+            WriteLog("error in file data");
             img_exists = false;
         }
         if (!img_exists)
@@ -496,29 +487,31 @@ class DeviceHandler{
         //Oracle is expecting an image of size 304x304x2 bytes
         Write_Bytes(ComCodes.Image, (uint)bytes.Length, bytes, (ushort)img.Width, (ushort)img.Height);
     }
-    private static async Task ReadFromStream(Windows.Storage.Streams.Buffer buf, IRandomAccessStreamReference stream){
-        if(stream == null)
+    private static async void GetThumbnail(IRandomAccessStreamReference thumby)
+    {
+        if (thumby == null)
             return;
-        try{
-            IRandomAccessStreamWithContentType ras = await stream.OpenReadAsync();
-            await ras.ReadAsync(buf, buf.Capacity, InputStreamOptions.ReadAhead);
-        }
-        catch(Exception ex){
+        Windows.Storage.Streams.Buffer thumb_buffer = new(8000000);
+        try
+        {
+            using IRandomAccessStreamWithContentType ras = await thumby.OpenReadAsync();
+            await ras.ReadAsync(thumb_buffer, thumb_buffer.Capacity, InputStreamOptions.ReadAhead);
+            }
+        catch (Exception ex)
+        {
             WriteLog(ex.ToString());
+            return;
         }
-    }
-    private static async void GetThumbnail(IRandomAccessStreamReference thumby){
-        Windows.Storage.Streams.Buffer thumb_buffer = new(5000000);
-        await ReadFromStream(thumb_buffer, thumby);
-
         using DataReader read_buffer = DataReader.FromBuffer(thumb_buffer);
         read_buffer.ReadBytes(thumb_buffer.ToArray());
 
         string path = "thumb.jpg";
-        try{
+        try
+        {
             await File.WriteAllBytesAsync(path, thumb_buffer.ToArray());
         }
-        catch(IOException){
+        catch (IOException)
+        {
             await Task.Delay(200);
             try
             {
@@ -534,7 +527,7 @@ class DeviceHandler{
     {
         if (!reconnect_mutex.WaitOne(reconnect_mutex_wait))
             return;
-        if (reconnect_timer.Enabled)
+        if (reconnect_timer.IsRunning)
         {
             reconnect_mutex.ReleaseMutex();
             return;
@@ -694,32 +687,23 @@ class DeviceHandler{
             }
             else if (cmd > InputCodes.Mute)
             {
-                if (config.WallpaperMode && wall_mutex.WaitOne(ping_mutex_wait))
+                if (config.WallpaperMode)
                 {
-                    set_wallpaper = (sbyte)((sbyte)cmd - InputCodes.PlayPause);
-                    if (set_wallpaper == 0)
-                    {
-                        if (!wallpaper_timer.Enabled)
-                            wallpaper_timer.Start();
-                        else
-                            wallpaper_timer.Stop();
-                    }
-                    wall_mutex.ReleaseMutex();
+                    if (cmd == InputCodes.Mute)
+                        GUI.media_writer_queue.TryEnqueue(WallpaperPlayPause);
+                    else if (cmd == InputCodes.NextTrack)
+                        GUI.media_writer_queue.TryEnqueue(IncrementWallpaper);
+                    else if (cmd == InputCodes.PreviousTrack)
+                        GUI.media_writer_queue.TryEnqueue(DecrementWallpaper);
                 }
                 else if (!config.WallpaperMode && gsmtcs != null)
                 {
                     if (cmd == InputCodes.PreviousTrack)
-                    {
                         await gsmtcs.TrySkipPreviousAsync();
-                    }
                     else if (cmd == InputCodes.PlayPause)
-                    {
                         await gsmtcs.TryTogglePlayPauseAsync();
-                    }
                     else if (cmd == InputCodes.NextTrack)
-                    {
                         await gsmtcs.TrySkipNextAsync();
-                    }
                 }
             }
             if (gsmtcs == null && !config.WallpaperMode)
@@ -779,16 +763,18 @@ class DeviceHandler{
             device_connected = false;
         }
     }
-    
-    private static byte[] ConvertTo565(byte[] bytes){
+
+    private static byte[] ConvertTo565(byte[] bytes)
+    {
         int byte_count = bytes.Length;
-        byte[] rgb565 = new byte[byte_count*2/3];
+        byte[] rgb565 = new byte[byte_count * 2 / 3];
         int i_565 = 0;
-        for(int i = 0; i < byte_count; i+=3){
-            rgb565[i_565] = (byte)((bytes[i] & 0xF8) | (bytes[i+1] >> 5));
-            rgb565[i_565+1] = (byte)(((bytes[i+1] & 0x1C) << 3) | (bytes[i+2]  >> 3));
-            i_565+=2;
+        for (int i = 0; i < byte_count; i += 3)
+        {
+            rgb565[i_565] = (byte)((bytes[i] & 0xF8) | (bytes[i + 1] >> 5));
+            rgb565[i_565 + 1] = (byte)(((bytes[i + 1] & 0x1C) << 3) | (bytes[i + 2] >> 3));
+            i_565 += 2;
         }
         return rgb565;
-    }    
+    }
 }
