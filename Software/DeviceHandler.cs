@@ -98,7 +98,9 @@ class DeviceHandler
         public required List<string> MonitoredProgram { get; set; }//List of programs to listen to for media
         public bool WallpaperMode { get; set; }//Display images in wallpapers folder or listen to media?
         public ushort WallpaperPeriod { get; set; }//How long to wait before changing image in minutes
-        public string? WallpaperText { get; set; }
+        public string? WallpaperTitle { get; set; }
+        public string? WallpaperAlbum { get; set; }
+        public string? WallpaperArtist { get; set; }
         public uint Speed { get; set; }//UART speed. Unused as connection is USB Fullspeed
         public ushort WriteTimeout { get; set; }//Serial write timeout in ms
         public ushort ReadTimeout { get; set; }//Serial read timeout in ms
@@ -223,7 +225,7 @@ class DeviceHandler
         else
             return;
         Write_Bytes(ComCodes.DurPos, 8, new byte[8], 0, 1);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
-        string text = config.WallpaperText ?? " \n \n \n";
+        string text = (config.WallpaperAlbum != null && config.WallpaperArtist != null && config.WallpaperTitle != null)? config.WallpaperTitle + "\n" + config.WallpaperAlbum + "\n" + config.WallpaperArtist + "\n" : " \n \n \n";
         Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(text), Encoding.UTF8.GetBytes(text), 0, 0);
         ResizeThumbnail(wallpapers[current_wallpaper]);
     }
@@ -306,6 +308,11 @@ class DeviceHandler
             wallpaper_timer.Stop();
             media_change_timer.Start();
         }
+    }
+    private static void OnRequestSessionRefresh()
+    {
+        if(gsmtcsm != null)
+            GsmtcsSessionsChanged(gsmtcsm, null);
     }
     private static void GsmtcsSessionsChanged(GlobalSystemMediaTransportControlsSessionManager manager, SessionsChangedEventArgs? args)
     {
@@ -695,6 +702,7 @@ class DeviceHandler
             if (gsmtcs == null && !config.WallpaperMode)
             {
                 WriteLog("No current media session and not in wallpaper mode :(");
+                GUI.media_writer_queue.TryEnqueue(OnRequestSessionRefresh);
             }
         }
     }
