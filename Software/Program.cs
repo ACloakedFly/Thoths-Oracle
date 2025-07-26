@@ -84,7 +84,7 @@ namespace Contexts
         public static Thread read_thread = new(DeviceHandler.Read);
         public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
         public static DispatcherQueue media_writer_queue = DispatcherQueue.GetForCurrentThread();
-        static DeviceHandler.Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
+        public static DeviceHandler.Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
         static readonly DeviceHandler.Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
 
         private GUI()
@@ -177,7 +177,6 @@ namespace Contexts
 
         private void TopMenuClick(object? sender, EventArgs args)
         {
-            oracle_Configuration = ConfigHandler.LoadConfig();
             GetPorts(null, args);
             int wp_mode = oracle_Configuration.WallpaperMode ? 1 : 0;
             int not_wp_mode = !oracle_Configuration.WallpaperMode ? 1 : 0;
@@ -284,6 +283,7 @@ namespace Contexts
             if (sender == null)
                 return;
             oracle_Configuration.ComPort = sender.ToString() ?? "COM3";
+            media_writer_queue.TryEnqueue(DeviceHandler.SerialSetup);
             ResetList(sender);
         }
 
@@ -313,6 +313,8 @@ namespace Contexts
         [STAThread]
         public static void Main(string[] args)
         {
+            config_thread.Start();
+            Thread.Sleep(100);
             media_writer_queue = DispatcherQueueController.CreateOnDedicatedThread().DispatcherQueue;
             media_writer_queue.TryEnqueue(DeviceHandler.HandlerSetup);
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);

@@ -71,14 +71,10 @@ class DeviceHandler
             Artist = ar;
         }
     }
-    static string empty_media = " \n \n \n";
     static string new_media = "";
     static ulong prev_playback_info = 0;
     static string captured_media = "";
-    static IRandomAccessStreamReference? thumb_stream;
-    //static Windows.Storage.Streams.Buffer thumb_buffer = new(8000000);
     static bool device_connected = false;
-    static bool device_initial_connected = false;
     static uint song_duration = 0, song_position = 0;
     static ushort reset_pos = 0;
     static string logs = "log_", log_dir = "logs\\";
@@ -91,7 +87,7 @@ class DeviceHandler
     public static GlobalSystemMediaTransportControlsSession? gsmtcs;
     public static GlobalSystemMediaTransportControlsSession? previous_control_session;
     public static Mutex log_mutex = new();
-    public static readonly ushort log_timeout = 500;
+    public static readonly ushort log_timeout = 1000;
     public class Oracle_Configuration
     {
         public string? ComPort { get; set; }//Must be in COMx format
@@ -102,6 +98,7 @@ class DeviceHandler
         public required List<string> MonitoredProgram { get; set; }//List of programs to listen to for media
         public bool WallpaperMode { get; set; }//Display images in wallpapers folder or listen to media?
         public ushort WallpaperPeriod { get; set; }//How long to wait before changing image in minutes
+        public string? WallpaperText { get; set; }
         public uint Speed { get; set; }//UART speed. Unused as connection is USB Fullspeed
         public ushort WriteTimeout { get; set; }//Serial write timeout in ms
         public ushort ReadTimeout { get; set; }//Serial read timeout in ms
@@ -124,6 +121,7 @@ class DeviceHandler
     private static readonly int reconnect_mutex_wait = 500;
     private static Mutex reconnect_mutex = new();
     private static SemaphoreSlim media_mutex = new(1, 1);
+    private static bool disconnect_msg_sent = false;
     public class BalloonTip
     {
         public string title = "";
@@ -132,17 +130,19 @@ class DeviceHandler
     }
     private static BalloonTip serial_tip = new();
     private static readonly ushort serial_tip_timeout = 2000;
-    private static GlobalSystemMediaTransportControlsSessionManager? gsmtcsm; 
+    private static GlobalSystemMediaTransportControlsSessionManager? gsmtcsm;
     public static void HandlerSetup()
     {
-        config = ConfigHandler.LoadConfig();
+        config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
+        old_config = config;
+        GUI.oracle_Configuration = config;
         Directory.CreateDirectory(ConfigHandler.wallpapers_path);
         wallpapers = Directory.GetFiles(wallpaper_path).ToList();
         if (debug_log)
             DebugLogs();
         GeneralSetup();
         GUI.read_thread.Start();
-        
+
         gsmtcsm = GlobalSystemMediaTransportControlsSessionManager.RequestAsync().GetAwaiter().GetResult();
         gsmtcs = gsmtcsm.GetCurrentSession();
         if (gsmtcs != null && config.MonitoredProgram.Count > 0)
@@ -157,7 +157,7 @@ class DeviceHandler
         media_change_timer.Interval = new TimeSpan(0, 0, 0, 0, config.MediaCheck);
         media_change_timer.IsRepeating = true;
         media_change_timer.Tick += MediaCheck;
-
+       
         wallpaper_timer = GUI.media_writer_queue.CreateTimer();
         wallpaper_timer.Tick += WallpaperTimer;
         wallpaper_timer.Interval = new TimeSpan(0, 0, 0, 0, config.WallpaperPeriod);
@@ -180,7 +180,6 @@ class DeviceHandler
         reconnect_timer.IsRepeating = true;
         if (!device_connected)
             reconnect_timer.Start();
-        GUI.config_thread.Start();
     }
 
     private static void MediaCheck(DispatcherQueueTimer timer, object sender)
@@ -189,7 +188,6 @@ class DeviceHandler
             return;
         if (config.WallpaperMode || !queued_media || !device_connected)
             return;
-        WriteLog("Media be checking queued? " + queued_media + " connected? " + device_connected);
         Update_Media(gsmtcs, null);
     }
 
@@ -204,8 +202,6 @@ class DeviceHandler
     public static void NewWallpaper()
     {
         wallpapers = Directory.GetFiles(wallpaper_path).ToList();
-        foreach (string s in wallpapers)
-            WriteLog("Found img " + s);
     }
 
     private static void WallpaperPlayPause()
@@ -227,14 +223,14 @@ class DeviceHandler
         else
             return;
         Write_Bytes(ComCodes.DurPos, 8, new byte[8], 0, 1);//reset position when (duration == 0 and reset_pos == 1) || (duration != 0)
-        Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(empty_media), Encoding.UTF8.GetBytes(empty_media), 0, 0);
+        string text = config.WallpaperText ?? " \n \n \n";
+        Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(text), Encoding.UTF8.GetBytes(text), 0, 0);
         ResizeThumbnail(wallpapers[current_wallpaper]);
     }
     private static void OnInitialConnection(DispatcherQueueTimer timer, object sender)
     {
-        if (!device_initial_connected || gsmtcs == null || config.WallpaperMode)
+        if (gsmtcs == null || config.WallpaperMode)
             return;
-        device_initial_connected = false;
         Update_Media(gsmtcs, null);
         connected_timer.Stop();
     }
@@ -286,17 +282,16 @@ class DeviceHandler
         config = new Oracle_Configuration() { MonitoredProgram = new() };
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
         if (config.PlaybackDevice != null)
-        {
-            WriteLog("Looking for " + config.PlaybackDevice);
-            CoreAudioController coreAudioController = new();
-            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
-        }
+            {
+                WriteLog("Looking for " + config.PlaybackDevice);
+                CoreAudioController coreAudioController = new();
+                playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+            }
         if (playback_device != null)
             WriteLog("Found device: " + playback_device.Name);
         old_config.ComPort ??= "";
-        if (!old_config.ComPort.Equals(config.ComPort))
-            SerialSetup();
-        old_config = config;
+        captured_media = "";
+        //last_sent_thumbnail = "";
         if (config.WallpaperMode)
         {
             wallpaper_timer.Interval = new TimeSpan(0, config.WallpaperPeriod, 0);
@@ -316,25 +311,27 @@ class DeviceHandler
     {
         List<string> sessions = new();
         IReadOnlyList<GlobalSystemMediaTransportControlsSession> session_list = manager.GetSessions();
-        WriteLog("Active sessions");
+        if (session_list.Count < 1 || config.MonitoredProgram.Count < 1)
+        {
+            WriteLog("No sessions or none monitored");
+            return;
+        }
         foreach (var session in session_list)
         {
-            WriteLog(session.SourceAppUserModelId);
             sessions.Add(session.SourceAppUserModelId);
-
         }
         int index = -1;
         GlobalSystemMediaTransportControlsSession new_session = manager.GetCurrentSession();
         foreach (string monitored_session in config.MonitoredProgram)
         {
-            index = sessions.FindIndex(x => x.Equals(monitored_session, StringComparison.OrdinalIgnoreCase));
+            index = sessions.FindIndex(x => x.Equals(monitored_session, StringComparison.InvariantCultureIgnoreCase));
             if (index >= 0)
             {
                 new_session = session_list[index];
                 break;
             }
         }
-        if (previous_control_session != null && new_session.SourceAppUserModelId.Equals(previous_control_session.SourceAppUserModelId))
+        if (index == -1 || (previous_control_session != null && new_session.SourceAppUserModelId.Equals(previous_control_session.SourceAppUserModelId)))
             return;
         if (previous_control_session != null)
         {
@@ -383,12 +380,12 @@ class DeviceHandler
     private static int Update_Media(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
     {
         if (gsmtcs == null)
-            return 0;
+            return 5;
         GlobalSystemMediaTransportControlsSessionMediaProperties media_properties;
         if (!media_mutex.Wait(1))
         {
             queued_media = true;
-            return 0;
+            return 4;
         }
         try
         {
@@ -399,7 +396,7 @@ class DeviceHandler
             queued_media = true;
             WriteLog(ex.ToString());
             media_mutex.Release();
-            return 0;
+            return 3;
         }
         Info_Buffers info_ = new()
         {
@@ -409,28 +406,30 @@ class DeviceHandler
         };
         info_.Artist = config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist;
         new_media = info_.Title + "\n" + info_.Album + "\n" + info_.Artist + "\n";
-        if (new_media.Equals(captured_media) && media_properties.Thumbnail == thumb_stream)
+        if (new_media.Equals(captured_media))
         {
             media_mutex.Release();
-            //queued_media = false;
-            return 0;
+            queued_media = false;
+            return 2;
         }
-        thumb_stream = media_properties.Thumbnail;
         string? cause = args == null ? " " : args.GetType().ToString();
         cause ??= "";
-        captured_media = new_media;
         WriteLog("We are current \n" + new_media + "\nCause of media update: " + cause);
         queued_media = false;
         Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (uint)DateTime.Now.TimeOfDay.TotalSeconds);
         Write_Bytes(ComCodes.Text, (uint)Encoding.UTF8.GetByteCount(new_media), Encoding.UTF8.GetBytes(new_media), 0, 0);
-        WriteLog("Done writing info");
-        GetThumbnail(thumb_stream);
-        Thread.Sleep(500);
+        if (media_properties.Thumbnail == null)
+        {
+            queued_media = true;
+            media_mutex.Release();
+            return 6;
+        }
+        GetThumbnail(media_properties.Thumbnail);
         ResizeThumbnail();
         PlaybackInfoChanged(gsmtcs, null);
-        
         media_mutex.Release();
-        return 0;
+        captured_media = new_media;
+        return 1;
     }
 
     private static void MediaChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
@@ -486,16 +485,14 @@ class DeviceHandler
         //Oracle is expecting an image of size 304x304x2 bytes
         Write_Bytes(ComCodes.Image, (uint)bytes.Length, bytes, (ushort)img.Width, (ushort)img.Height);
     }
-    private static async void GetThumbnail(IRandomAccessStreamReference thumby)
+    private static void GetThumbnail(IRandomAccessStreamReference thumby)
     {
-        if (thumby == null)
-            return;
         Windows.Storage.Streams.Buffer thumb_buffer = new(8000000);
         try
         {
-            using IRandomAccessStreamWithContentType ras = await thumby.OpenReadAsync();
-            await ras.ReadAsync(thumb_buffer, thumb_buffer.Capacity, InputStreamOptions.ReadAhead);
-            }
+            using IRandomAccessStreamWithContentType ras = thumby.OpenReadAsync().GetAwaiter().GetResult();
+            ras.ReadAsync(thumb_buffer, thumb_buffer.Capacity, InputStreamOptions.ReadAhead).GetAwaiter().GetResult();
+        }
         catch (Exception ex)
         {
             WriteLog(ex.ToString());
@@ -507,20 +504,13 @@ class DeviceHandler
         string path = "thumb.jpg";
         try
         {
-            await File.WriteAllBytesAsync(path, thumb_buffer.ToArray());
+            File.WriteAllBytes(path, thumb_buffer.ToArray());
         }
         catch (IOException)
         {
-            await Task.Delay(200);
-            try
-            {
-                await File.WriteAllBytesAsync(path, thumb_buffer.ToArray());
-            }
-            catch (IOException)
-            {
-                WriteLog("thumb.jpg is still in use by another service");
-            }
+            WriteLog("thumb.jpg is in use by another service");
         }
+        thumb_buffer.Length = 0;
     }
     private static void SerialExceptionHandler(Exception exception)
     {
@@ -539,6 +529,9 @@ class DeviceHandler
         switch (exception)
         {
             case FileNotFoundException:
+                if (disconnect_msg_sent)
+                    break;
+                disconnect_msg_sent = true;
                 serial_tip.title = "Oracle Not Found";
                 log_message = "No Oracle on selected port. Ensure selected com port is correct and Oracle is plugged in.";
                 WriteLog(log_message, true, null, serial_tip);
@@ -569,7 +562,7 @@ class DeviceHandler
         }
         reconnect_mutex.ReleaseMutex();
     }
-    private static void SerialSetup()
+    public static void SerialSetup()
     {
         if (serialPort.IsOpen)
             serialPort.Close();
@@ -585,11 +578,11 @@ class DeviceHandler
         serialPort.WriteTimeout = config.WriteTimeout;
         try
         {
+            WriteLog("Connecting to port " + serialPort.PortName);
             serialPort.Open();
             device_connected = true;
+            queued_media = true;
             Write_Bytes(ComCodes.SystemMsg, 0, null, (ushort)((ushort)DateTime.Now.Day + ((byte)DateTime.Now.Month << 8)), (ushort)DateTime.Now.Year, (uint)DateTime.Now.TimeOfDay.TotalSeconds);
-            device_initial_connected = true;
-            connected_timer.Start();
             if (!reconnect_mutex.WaitOne(reconnect_mutex_wait))
                 return;
             reconnect_timer.Stop();
@@ -597,6 +590,9 @@ class DeviceHandler
             serial_tip.timeout = serial_tip_timeout;
             serial_tip.title = "Thoth has connected to Oracle";
             WriteLog("Oracle found and communications have begun!", true, null, serial_tip);
+            captured_media = "";
+            disconnect_msg_sent = false;
+            connected_timer.Start();
             reconnect_mutex.ReleaseMutex();
         }
         catch (Exception ex)
@@ -605,49 +601,40 @@ class DeviceHandler
             Thread.Sleep(config.DisconnectedWait);
         }
     }
-
     public static void Read()
     {
+        serialPort.DataReceived += OnBytesReceived;
+    }
+
+    private static void OnBytesReceived(object sender, SerialDataReceivedEventArgs e)
+    {
         string oracle_message = "";
-        int next_byte;
         int code = -1;
         int command = -1;
-        while (GUI.continue_read)
+        int next_byte = 0;
+        while (serialPort.BytesToRead > 0)
         {
-            try
+            next_byte = serialPort.ReadByte();
+            if (next_byte == 0)
+                continue;
+            if (next_byte < ComCodes.Message_Separator)
             {
-                next_byte = serialPort.ReadChar();
-                if (next_byte == 0)
-                    continue;
-                if (next_byte < ComCodes.Message_Separator)
-                {
-                    if (code <= 0)
-                        code = next_byte;
-                    else
-                        command = next_byte;
-                }
-                else if (next_byte != ComCodes.Message_Separator)
-                    oracle_message += Convert.ToChar(next_byte);
+                if (code <= 0)
+                    code = next_byte;
                 else
-                {
-                    DecodeRead(oracle_message, code, command);
-                    oracle_message = "";
-                    code = -1;
-                    command = -1;
-                }
+                    command = next_byte;
             }
-            catch (Exception ex)
+            else if (next_byte != ComCodes.Message_Separator)
+                oracle_message += Convert.ToChar(next_byte);
+            else
             {
-                if (ex is TimeoutException)
-                    continue;
-                if (oracle_message != "")
-                    WriteLog("Exception " + oracle_message);
-                SerialExceptionHandler(ex);
-                Thread.Sleep(config.DisconnectedWait);
+                DecodeRead(oracle_message, code, command);
+                oracle_message = "";
+                code = -1;
+                command = -1;
             }
         }
     }
-
     public static async void DecodeRead(string oracle_message, int code, int cmd)
     {
         double vol;

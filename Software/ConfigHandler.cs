@@ -37,6 +37,7 @@ class ConfigHandler
         MonitoredProgram = new() {  "vlc.exe" },
         WallpaperMode = false,
         WallpaperPeriod = 5,
+        WallpaperText = "Wallpaper mode\nn\nn\n",
         Speed = 921600,
         WriteTimeout = 5000,
         ReadTimeout = 1000,
@@ -50,13 +51,12 @@ class ConfigHandler
 
     };
     const string default_config = @"
-
 #Configuration file
 
 #Port can be found in the system tray menu or through Device Manager on windows.
 ComPort: COM3
 #Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu too
-VolumeSensitivity: 3
+VolumeSensitivity: 1
 VolumeSensitivityOptions:
 - 1
 - 3
@@ -68,15 +68,19 @@ PlaybackDevice: Default Device
 AlbumArtist: false
 #Change which programs Thoth's Oracle listens to. Case insenstive.
 #If multiple are provided, their order represents their priority (top is first). Only the highest active program will be used.
-#If none are provided or none listed are found, any program displaying media to the OS will be used. This will get messy if multiple programs are fighting for focus
+#If none are provided or none listed are found, program will not listen to any. This is to prevent some programs that drop their sessions when changing tracks
 MonitoredProgram:
 - MusIcBEe.exe
 - vlc.exe
+- fireFOX.exe
 #Wallpaper mode for cycling through images in Wallpapers folder
 WallpaperMode: false
 #How long before image changes in minutes
 WallpaperPeriod: 5
-
+#Display the following text when in wallpaper mode
+WallpaperText: 'Wallpaper Mode
+  n
+  n'
 
 #Nitty gritty tuning. These values should be good for most circumstances
 #Speed is unused
@@ -87,11 +91,10 @@ ConnectionWait: 500
 ReConnectionWait: 2000
 MediaCheck: 500
 ConfigCheck: 1000
-OracleReadyWait: 400
+OracleReadyWait: 1000
 DisconnectedWait: 4000
 
 LogContinuous: false
-
     ";
     private static void ExceptionHandler(Exception exception)
     {
@@ -127,6 +130,7 @@ LogContinuous: false
         catch (Exception ex)
         {
             ExceptionHandler(ex);
+            DeviceHandler.WriteLog("Failed with exception " + ex.ToString());
         }
         return default_oracle_config;
     }
@@ -139,7 +143,7 @@ LogContinuous: false
             string yaml = serializer.Serialize(config);
             List<string> yamls = yaml.Split('\n').ToList();
             int line = 0;
-            using (StreamReader stream = new (configurationFile))
+            using (StreamReader stream = new(configurationFile))
             {
                 string? ss = stream.ReadLine();
                 while (ss != null)
@@ -163,10 +167,11 @@ LogContinuous: false
             ExceptionHandler(ex);
         }
     }
+    private static FileSystemWatcher watcher = new("\\");
+    private static FileSystemWatcher wallpaper_watcher = new(wallpapers_path);
     public static void ConfigChangeHandler()
     {
         Directory.CreateDirectory(wallpapers_path);
-        using FileSystemWatcher watcher = new ("\\");
         watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         watcher.Changed += OnChanged;
@@ -177,7 +182,6 @@ LogContinuous: false
         watcher.IncludeSubdirectories = true;
         watcher.EnableRaisingEvents = true;
 
-        using FileSystemWatcher wallpaper_watcher = new (wallpapers_path);
         wallpaper_watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         wallpaper_watcher.Changed += OnWallpapersChanged;
@@ -185,11 +189,6 @@ LogContinuous: false
         wallpaper_watcher.Error += OnError;
 
         wallpaper_watcher.EnableRaisingEvents = true;
-
-        while (GUI.continue_config)
-        {
-            Thread.Sleep(1000);
-        }
     }
     private static void OnChanged(object sender, FileSystemEventArgs e)
     {
