@@ -1,1 +1,0 @@
-# PCB Assembly Instructions

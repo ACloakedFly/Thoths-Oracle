@@ -37,7 +37,9 @@ class ConfigHandler
         MonitoredProgram = new() {  "vlc.exe" },
         WallpaperMode = false,
         WallpaperPeriod = 5,
-        WallpaperText = "Wallpaper mode\nn\nn\n",
+        WallpaperTitle = "Wallpaper mode",
+        WallpaperAlbum = " ",
+        WallpaperArtist = " ",
         Speed = 921600,
         WriteTimeout = 5000,
         ReadTimeout = 1000,
@@ -78,14 +80,14 @@ WallpaperMode: false
 #How long before image changes in minutes
 WallpaperPeriod: 5
 #Display the following text when in wallpaper mode
-WallpaperText: 'Wallpaper Mode
-  n
-  n'
+WallpaperTitle: 'Wallpaper Mode'
+WallpaperAlbum: ' '
+WallpaperArtist: ' '
+Speed: 9600
+WriteTimeout: 5000
 
 #Nitty gritty tuning. These values should be good for most circumstances
 #Speed is unused
-Speed: 9600
-WriteTimeout: 5000
 ReadTimeout: 1000
 ConnectionWait: 500
 ReConnectionWait: 2000
@@ -93,7 +95,6 @@ MediaCheck: 500
 ConfigCheck: 1000
 OracleReadyWait: 1000
 DisconnectedWait: 4000
-
 LogContinuous: false
     ";
     private static void ExceptionHandler(Exception exception)
