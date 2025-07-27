@@ -3,7 +3,8 @@
 ## Hardware
 | Qty | Item | Notes |
 | ---- | -- | ------| 
-| 9 | M3x20 SHCS | |
+| 7 or 9 | M3x20 SHCS | |
+| 2 | M3x16 SHCS | (optional) shorter screws can be used for the thumbscrews. |
 | 9 | M3x4x5 brass heatset inserts | |
 | 2 | 6mm shaft guitar knobs | 18mm outer diameter works well. Knobs are 38mm apart, so anything larger might get tight. |
 | 3 | Keycaps for the switches | |
