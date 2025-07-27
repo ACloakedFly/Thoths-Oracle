@@ -31,11 +31,11 @@ USB operated media display/controller for Windows(, Linux, MacOS WIP)
   - 6mm rotary potentiometer and encoder
   - 3D printed shell
   - One screw size
-  - Small PCB with only THT components
+  - Small PCB with mostly THT components. Only the hotswap sockets are SMD
 
 # Make your own!
 
-Instructions for each section are in their respective folder. Consult BOM and Assembly to get started.
+Everything you need to make your own should be in BOM-and-Assembly. Let me know if anything can be improved.
 
 # How it works
 
