@@ -43,8 +43,6 @@ All STLs are in the correct orientation for printing. The Oracle_inputs STL is t
 Here are the support settings I have found to work well
 ![Support_settings](https://github.com/ACloakedFly/Thoths-Oracle/blob/dev/Images/Support_settings.png)
 
-## Preparing Your Prints
-
 # PCB Assembly and Heat Sets Instructions
 
 **Disclaimer:** I am not the best solderer. This is more for where everything goes, and an order that works. You do not need to be a highly skilled solderer to do this. 
