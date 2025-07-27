@@ -127,7 +127,7 @@ As you slide the PCB into the shell, pull the wall with USB hole away from the E
 
 Screw the inputs plate onto the shell
 
-<img src="" width="500">
+<img src="https://github.com/ACloakedFly/Thoths-Oracle/blob/dev/Images/Assembly_Pics/20250727_092545.JPG" width="500">
 
 Line up the screen with the heat sets and connect the ribbon cable. Make sure GND through LED are the ones connected.
 
@@ -175,7 +175,7 @@ Line up the pins and push the switches into place. The keycaps go on next.
 
 Your build is complete!
 
-<img src="" width="500">
+<img src="https://github.com/ACloakedFly/Thoths-Oracle/blob/dev/Images/Assembly_Pics/20250727_091937.JPG" width="500">
 
 # Firmware Flashing Instructions
 
