@@ -93,3 +93,6 @@ Companion app is provided as portable application that doesn't need installation
 - Right click on .exe and select 'Create shortcut'
 - Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 
+# License
+
+Thoth's Oracle is licensed under GPL-3.0
