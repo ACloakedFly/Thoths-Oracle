@@ -93,5 +93,4 @@ Companion app is provided as portable application that doesn't need installation
 ### Windows
 - Right click on .exe and select 'Create shortcut'
 - Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
-
-# Support Me
+- 
