@@ -14,8 +14,7 @@ USB operated media display/controller for Windows(, Linux, MacOS WIP)
   - Title
   - Album
   - Artist
-  - Duration
-  - Current position
+  - Duration and current position
 - Basic media control
   - Play/pause
   - Skip track
@@ -74,7 +73,7 @@ Everything you need to make your own should be in BOM-and-Assembly. Let me know 
 # Configuration
 
  The following can be configured from companion app or config file
-- Which program to listen to, or any playing media
+- Which program to listen to
 - Port the device is connected to
 - Sensitivity of volume knob
 - Which output device to control (default, speakers, headphones, etc.)
