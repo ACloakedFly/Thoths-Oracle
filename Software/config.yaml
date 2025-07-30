@@ -28,11 +28,11 @@ WallpaperPeriod: 5
 WallpaperTitle: Wallpaper Mode
 WallpaperAlbum: ' '
 WallpaperArtist: ' '
-Speed: 9600
-WriteTimeout: 5000
 
 #Nitty gritty tuning. These values should be good for most circumstances
 #Speed is unused
+Speed: 9600
+WriteTimeout: 5000
 ReadTimeout: 1000
 ConnectionWait: 500
 ReConnectionWait: 2000
