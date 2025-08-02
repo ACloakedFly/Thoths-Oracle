@@ -1,6 +1,8 @@
 # Thoth's Oracle
 
-USB operated media display/controller for Windows(, Linux, MacOS WIP)
+USB operated media display/controller for Windows(, Linux, MacOS WIP).
+
+USB music display helps you keep track of what you are listening to without taking up precious screen space. Thoth's Oracle provides a one stop shop for checking on the current media information and basic controls such as skipping tracks, playing and pausing and adjusting the volume.
 ![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4854.JPG)
 ![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4855.JPG)
 
