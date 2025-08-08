@@ -1,4 +1,4 @@
-25247733395111194
+25251241701659090
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -101304,6 +101304,13 @@ MX,cherry,gateron,kailh,pg1511,socket
 4
 2
 keyswitches
+Kailh_socket_MX_modified
+MX-style keyswitch with Kailh socket mount
+MX,cherry,gateron,kailh,pg1511,socket
+0
+2
+2
+keyswitches
 Kailh_socket_MX_optional
 MX-style keyswitch with support for optional Kailh socket
 MX,cherry,gateron,kailh,pg1511,socket
@@ -101354,6 +101361,13 @@ MX,cherry,gateron,kailh,pg1511,socket
 2
 keyswitches
 Kailh_socket_PG1350
+Kailh "Choc" PG1350 keyswitch socket mount
+kailh,choc
+0
+2
+2
+keyswitches
+Kailh_socket_PG1350_modified
 Kailh "Choc" PG1350 keyswitch socket mount
 kailh,choc
 0
