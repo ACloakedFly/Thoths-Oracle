@@ -2129,6 +2129,12 @@
 		(uuid "24dd5560-23bd-45d0-bbd6-032c0cc6f871")
 	)
 	(junction
+		(at 250.19 41.91)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "2553fd33-ae16-4f18-ad8f-cee2148ebaf2")
+	)
+	(junction
 		(at 86.36 99.06)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -2145,6 +2151,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "3e9aaf1d-d6a6-440d-b382-746dd1a17acf")
+	)
+	(junction
+		(at 250.19 31.75)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "3fbc3986-6215-4e6c-8d3f-609adfed2a3d")
 	)
 	(junction
 		(at 119.38 86.36)
@@ -2195,6 +2207,12 @@
 		(uuid "87577030-e782-4ba7-992f-1cd200e36118")
 	)
 	(junction
+		(at 250.19 72.39)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "8930e9a3-9f4c-44cb-9ef8-58244167e185")
+	)
+	(junction
 		(at 119.38 81.28)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -2213,10 +2231,28 @@
 		(uuid "b5dbbea4-a802-4734-8589-9222fcd6f791")
 	)
 	(junction
+		(at 250.19 57.15)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "b7e28588-a1d3-4606-bf4a-2e7f8cf6f3aa")
+	)
+	(junction
 		(at 119.38 88.9)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "bf88dc43-ae0e-4e50-9962-a05122a7e123")
+	)
+	(junction
+		(at 250.19 62.23)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "c41b59d6-8c0f-4068-a420-a338f1a452ac")
+	)
+	(junction
+		(at 250.19 46.99)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "c8f62e47-75b5-4fef-bf35-1fc9685c9456")
 	)
 	(junction
 		(at 104.14 116.84)
@@ -2286,7 +2322,7 @@
 	)
 	(wire
 		(pts
-			(xy 245.11 31.75) (xy 257.81 31.75)
+			(xy 245.11 31.75) (xy 250.19 31.75)
 		)
 		(stroke
 			(width 0)
@@ -2416,7 +2452,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 62.23) (xy 245.11 62.23)
+			(xy 257.81 62.23) (xy 250.19 62.23)
 		)
 		(stroke
 			(width 0)
@@ -2543,6 +2579,16 @@
 			(type default)
 		)
 		(uuid "255dd569-a30d-48e4-a803-dec51b01e218")
+	)
+	(wire
+		(pts
+			(xy 250.19 72.39) (xy 236.22 72.39)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "29e7cb53-88f9-45b6-83ca-44727b1026c1")
 	)
 	(wire
 		(pts
@@ -2686,6 +2732,16 @@
 	)
 	(wire
 		(pts
+			(xy 250.19 62.23) (xy 245.11 62.23)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4563cf68-d542-42dc-95c0-d5c9d883c946")
+	)
+	(wire
+		(pts
 			(xy 137.16 81.28) (xy 119.38 81.28)
 		)
 		(stroke
@@ -2766,6 +2822,16 @@
 	)
 	(wire
 		(pts
+			(xy 250.19 41.91) (xy 223.52 41.91)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4cef41e0-6971-47d5-9a23-a0eb8fdcae81")
+	)
+	(wire
+		(pts
 			(xy 138.43 113.03) (xy 73.66 113.03)
 		)
 		(stroke
@@ -2826,7 +2892,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 83.82) (xy 238.76 83.82)
+			(xy 250.19 72.39) (xy 257.81 72.39)
 		)
 		(stroke
 			(width 0)
@@ -2853,6 +2919,16 @@
 			(type default)
 		)
 		(uuid "5f5a45a1-fd87-4116-bea9-704ce75ec456")
+	)
+	(wire
+		(pts
+			(xy 250.19 46.99) (xy 245.11 46.99)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5fcea0bf-910a-40c1-b348-57b94a9b17ee")
 	)
 	(wire
 		(pts
@@ -2923,6 +2999,16 @@
 			(type default)
 		)
 		(uuid "6fe357d0-473e-4369-9918-d8135c616ad3")
+	)
+	(wire
+		(pts
+			(xy 250.19 31.75) (xy 257.81 31.75)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "70c3e9af-8ff6-45dd-8742-7feacbae046b")
 	)
 	(wire
 		(pts
@@ -3056,16 +3142,6 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 72.39) (xy 257.81 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "888f85a9-24ba-49e7-a25a-7603649c5b9d")
-	)
-	(wire
-		(pts
 			(xy 76.2 109.22) (xy 81.28 109.22)
 		)
 		(stroke
@@ -3136,7 +3212,7 @@
 	)
 	(wire
 		(pts
-			(xy 147.32 90.17) (xy 238.76 90.17)
+			(xy 147.32 90.17) (xy 236.22 90.17)
 		)
 		(stroke
 			(width 0)
@@ -3236,7 +3312,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 41.91) (xy 223.52 41.91)
+			(xy 257.81 41.91) (xy 250.19 41.91)
 		)
 		(stroke
 			(width 0)
@@ -3326,7 +3402,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 57.15) (xy 226.06 57.15)
+			(xy 257.81 57.15) (xy 250.19 57.15)
 		)
 		(stroke
 			(width 0)
@@ -3376,6 +3452,16 @@
 	)
 	(wire
 		(pts
+			(xy 250.19 57.15) (xy 226.06 57.15)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c602766a-0007-4f50-b5b6-e67d9e13b20c")
+	)
+	(wire
+		(pts
 			(xy 142.24 81.28) (xy 142.24 83.82)
 		)
 		(stroke
@@ -3386,7 +3472,7 @@
 	)
 	(wire
 		(pts
-			(xy 238.76 83.82) (xy 238.76 90.17)
+			(xy 236.22 72.39) (xy 236.22 90.17)
 		)
 		(stroke
 			(width 0)
@@ -3606,7 +3692,7 @@
 	)
 	(wire
 		(pts
-			(xy 257.81 46.99) (xy 245.11 46.99)
+			(xy 257.81 46.99) (xy 250.19 46.99)
 		)
 		(stroke
 			(width 0)
@@ -4169,6 +4255,75 @@
 		)
 	)
 	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 250.19 67.31 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "09820bf9-3d6b-43b4-ac9a-24ca77b1a8d1")
+		(property "Reference" "SW8"
+			(at 254.508 65.532 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "Next_Alt"
+			(at 251.968 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "keyswitches:Kailh_socket_PG1350_modified"
+			(at 245.11 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 245.11 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 250.19 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "47fd1b1f-697f-4f68-be35-e8b6f3d2de58")
+		)
+		(pin "2"
+			(uuid "549cd37d-a7cb-448d-98fc-8a01669f036f")
+		)
+		(instances
+			(project "Thoth's Oracle PCB"
+				(path "/24cc6d77-48b0-4f00-a1ce-dc43459faff7"
+					(reference "SW8")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Switch:SW_Wuerth_450301014042")
 		(at 156.21 50.8 180)
 		(unit 1)
@@ -4358,7 +4513,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "keyswitches:Kailh_socket_MX_PG1350"
+		(property "Footprint" "keyswitches:Kailh_socket_MX_modified"
 			(at 262.89 52.07 0)
 			(effects
 				(font
@@ -4628,6 +4783,144 @@
 	)
 	(symbol
 		(lib_id "Switch:SW_Push")
+		(at 250.19 52.07 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "65f40957-8dad-427a-a437-62360b1d51e2")
+		(property "Reference" "SW6"
+			(at 255.016 49.53 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "PP_Alt"
+			(at 252.476 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "keyswitches:Kailh_socket_PG1350_modified"
+			(at 245.11 52.07 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 245.11 52.07 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 250.19 52.07 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "e48a90b0-fba5-474a-b6b2-015d76e64bee")
+		)
+		(pin "2"
+			(uuid "d0d4fa1f-4fe3-46df-9a49-070f91bee760")
+		)
+		(instances
+			(project ""
+				(path "/24cc6d77-48b0-4f00-a1ce-dc43459faff7"
+					(reference "SW6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 250.19 36.83 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "7b201500-f5a4-45fe-b146-331339e86890")
+		(property "Reference" "SW7"
+			(at 254.762 35.052 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "Prev_Alt"
+			(at 252.476 33.528 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "keyswitches:Kailh_socket_PG1350_modified"
+			(at 245.11 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 245.11 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 250.19 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "f025ac5d-35c2-4ab1-9167-7370d4cef191")
+		)
+		(pin "2"
+			(uuid "04b6ae60-6258-4cec-bf97-b95ca78a3725")
+		)
+		(instances
+			(project "Thoth's Oracle PCB"
+				(path "/24cc6d77-48b0-4f00-a1ce-dc43459faff7"
+					(reference "SW7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Switch:SW_Push")
 		(at 257.81 67.31 270)
 		(mirror x)
 		(unit 1)
@@ -4654,7 +4947,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "keyswitches:Kailh_socket_MX_PG1350"
+		(property "Footprint" "keyswitches:Kailh_socket_MX_modified"
 			(at 262.89 67.31 0)
 			(effects
 				(font
@@ -4724,7 +5017,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "keyswitches:Kailh_socket_MX_PG1350"
+		(property "Footprint" "keyswitches:Kailh_socket_MX_modified"
 			(at 262.89 36.83 0)
 			(effects
 				(font

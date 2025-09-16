@@ -13,3 +13,4 @@ thumb*
 production/
 *backups/
 *.FCBak
+*.lck

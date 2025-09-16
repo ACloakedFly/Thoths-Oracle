@@ -21,7 +21,7 @@
 | 1 | RV09 rotary potentiometer | [RV09BCF-40](https://www.taiwanalpha.com/downloads?target=products&id=72) | A 12.5mm long shaft will work. Longer would be better. |
 | 2 | female header sockets 1x9 pins | [66951-009LF](https://www.digikey.com/en/products/detail/amphenol-cs-fci/66951-009LF/1002554) | Ideally 8.4mm insulation height. Longer header sockets can be cut shorter (eg. 1x20 cut to two 1x9s) |
 | 1 | XH 2.5mm horizontal male header 1x8 pins | [S8B-XH-A-1](https://www.digikey.com/en/products/detail/jst-sales-america-inc/S8B-XH-A-1/9961927) |
-| 1 | JST 2.5mm connector cable 1x8 pins | [XHP-8](https://www.digikey.com/en/resources/datasheets/jst/xh-connector) | These can be found as [preassebled cables](https://www.aliexpress.com/item/4000698884218.html?spm=a2g0o.order_list.order_list_main.5.5e661802USnLWp). At least 5cm is needed but it might be hard to route. 10cm works fine. |
+| 1 | JST 2.5mm connector cable 1x8 pins | [XHP-8](https://www.digikey.com/en/resources/datasheets/jst/xh-connector) | These can be found as [preassembled cables](https://www.aliexpress.com/item/4000698884218.html?spm=a2g0o.order_list.order_list_main.5.5e661802USnLWp). At least 5cm is needed but it might be hard to route. 10cm works fine. |
 | 1 | USB-C data cable | | C to C or C to A depending on your preference |
 
 ## 3D Prints
