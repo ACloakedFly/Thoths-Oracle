@@ -163,14 +163,14 @@ void lvgl_ui(lv_disp_t *disp)
     lv_obj_add_style(ll_line, &style, 0);
 
     //Custom font declration and assigning it to all the text
-    LV_FONT_DECLARE(dejavu_sans_16_phl);   
-    lv_obj_set_style_text_font(ld_album, &dejavu_sans_16_phl, 0);
-    lv_obj_set_style_text_font(ld_artist, &dejavu_sans_16_phl, 0);
-    lv_obj_set_style_text_font(ld_title, &dejavu_sans_16_phl, 0);
-    lv_obj_set_style_text_font(ld_dur, &dejavu_sans_16_phl, 0);
-    lv_obj_set_style_text_font(ld_pos, &dejavu_sans_16_phl, 0);
-    lv_obj_set_style_text_font(ld_time, &dejavu_sans_16_phl, 0);
-    lv_obj_set_style_text_font(ld_date, &dejavu_sans_16_phl, 0);
+    LV_FONT_DECLARE(dejavusans);   
+    lv_obj_set_style_text_font(ld_album, &dejavusans, 0);
+    lv_obj_set_style_text_font(ld_artist, &dejavusans, 0);
+    lv_obj_set_style_text_font(ld_title, &dejavusans, 0);
+    lv_obj_set_style_text_font(ld_dur, &dejavusans, 0);
+    lv_obj_set_style_text_font(ld_pos, &dejavusans, 0);
+    lv_obj_set_style_text_font(ld_time, &dejavusans, 0);
+    lv_obj_set_style_text_font(ld_date, &dejavusans, 0);
 
     //Timer for updating song position and system time
     song_time = lv_timer_create(update_timer, 1000, NULL);
