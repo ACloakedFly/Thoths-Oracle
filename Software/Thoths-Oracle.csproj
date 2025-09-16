@@ -3,23 +3,35 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net7.0-windows10.0.17763.0</TargetFramework>
+    <Architecture>win-x64</Architecture>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Nullable>enable</Nullable>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <PublishRelease>true</PublishRelease>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+
     <NoWarn>$(NoWarn);NU1701</NoWarn>
     <ApplicationIcon>Icons_Images\\logo.ico</ApplicationIcon>
     <Copyright>© 2025 Dominique Negm</Copyright>
     <Version>1.1.0</Version>
-    <FileVersion>1.6.0</FileVersion>
-    <AssemblyVersion>1.6.2</AssemblyVersion>
+    <FileVersion>1.6.2</FileVersion>
+    <AssemblyVersion>1.6.3</AssemblyVersion>
     <Product>Thoth's Oracle</Product>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebugSymbols>False</DebugSymbols>
+    <DebugType>None</DebugType>
   </PropertyGroup>
 
   
   <ItemGroup>
     <PackageReference Include="AudioSwitcher.AudioApi" Version="4.0.0-alpha5" />
     <PackageReference Include="AudioSwitcher.AudioApi.CoreAudio" Version="4.0.0-alpha5" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.7.0" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.8.1" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />

@@ -84,8 +84,8 @@ namespace Contexts
         public static Thread read_thread = new(DeviceHandler.Read);
         public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
         public static DispatcherQueue media_writer_queue = DispatcherQueue.GetForCurrentThread();
-        public static DeviceHandler.Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
-        static readonly DeviceHandler.Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
+        public static Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
+        static readonly Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
 
         private GUI()
         {

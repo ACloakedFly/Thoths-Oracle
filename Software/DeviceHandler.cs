@@ -88,30 +88,6 @@ class DeviceHandler
     public static GlobalSystemMediaTransportControlsSession? previous_control_session;
     public static Mutex log_mutex = new();
     public static readonly ushort log_timeout = 1000;
-    public class Oracle_Configuration
-    {
-        public string? ComPort { get; set; }//Must be in COMx format
-        public ushort VolumeSensitivity { get; set; }//How many volume points to (in/de)crease by for every encoder position change
-        public List<ushort>? VolumeSensitivityOptions { get; set; }//List of options for the menu
-        public string? PlaybackDevice { get; set; }//Which speakers to control the volume of
-        public bool AlbumArtist { get; set; }//Send Album artist or artist property?
-        public required List<string> MonitoredProgram { get; set; }//List of programs to listen to for media
-        public bool WallpaperMode { get; set; }//Display images in wallpapers folder or listen to media?
-        public ushort WallpaperPeriod { get; set; }//How long to wait before changing image in minutes
-        public string? WallpaperTitle { get; set; }
-        public string? WallpaperAlbum { get; set; }
-        public string? WallpaperArtist { get; set; }
-        public uint Speed { get; set; }//UART speed. Unused as connection is USB Fullspeed
-        public ushort WriteTimeout { get; set; }//Serial write timeout in ms
-        public ushort ReadTimeout { get; set; }//Serial read timeout in ms
-        public ushort ConnectionWait { get; set; }//How long to wait before polling for new device connection and resetting serial comms
-        public ushort ReConnectionWait { get; set; }//How long to wait before polling for reconnection and resend media info
-        public ushort MediaCheck { get; set; }//How long to wait before
-        public ushort ConfigCheck { get; set; }
-        public ushort OracleReadyWait { get; set; }
-        public ushort DisconnectedWait { get; set; }
-        public bool LogContinuous { get; set; }
-    };
     public static Oracle_Configuration config = new() { MonitoredProgram = new() };
     public static Oracle_Configuration old_config = new() { MonitoredProgram = new() };
     private static DispatcherQueueTimer reconnect_timer = DispatcherQueue.GetForCurrentThread().CreateTimer();
@@ -254,8 +230,10 @@ class DeviceHandler
 
     public static void WriteLog(string log_text, bool new_line = true, string? path = null, BalloonTip? tip = null)
     {
-        if (!log_mutex.WaitOne(log_timeout))
+        if (logs.Equals("log_"))
             return;
+        if (!log_mutex.WaitOne(log_timeout))
+                return;
         string nl = new_line ? "\n" : "";
         if (debug_log)
         {
@@ -284,16 +262,15 @@ class DeviceHandler
         config = new Oracle_Configuration() { MonitoredProgram = new() };
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
         if (config.PlaybackDevice != null)
-            {
-                WriteLog("Looking for " + config.PlaybackDevice);
-                CoreAudioController coreAudioController = new();
-                playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
-            }
+        {
+            WriteLog("Looking for " + config.PlaybackDevice);
+            CoreAudioController coreAudioController = new();
+            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+        }
         if (playback_device != null)
             WriteLog("Found device: " + playback_device.Name);
         old_config.ComPort ??= "";
         captured_media = "";
-        //last_sent_thumbnail = "";
         if (config.WallpaperMode)
         {
             wallpaper_timer.Interval = new TimeSpan(0, config.WallpaperPeriod, 0);

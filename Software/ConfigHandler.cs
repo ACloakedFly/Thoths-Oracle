@@ -23,20 +23,44 @@ using YamlDotNet.Core;
 using YamlDotNet.Serialization.NamingConventions;
 using Contexts;
 
+public class Oracle_Configuration
+{
+    public string? ComPort { get; set; }//Must be in COMx format
+    public ushort VolumeSensitivity { get; set; }//How many volume points to (in/de)crease by for every encoder position change
+    public List<ushort>? VolumeSensitivityOptions { get; set; }//List of options for the menu
+    public string? PlaybackDevice { get; set; }//Which speakers to control the volume of
+    public bool WallpaperMode { get; set; }//Display images in wallpapers folder or listen to media?
+    public ushort WallpaperPeriod { get; set; }//How long to wait before changing image in minutes
+    public bool AlbumArtist { get; set; }//Send Album artist or artist property?
+    public required List<string> MonitoredProgram { get; set; }//List of programs to listen to for media
+    public string? WallpaperTitle { get; set; }
+    public string? WallpaperAlbum { get; set; }
+    public string? WallpaperArtist { get; set; }
+    public uint Speed { get; set; }//UART speed. Unused as connection is USB Fullspeed
+    public ushort WriteTimeout { get; set; }//Serial write timeout in ms
+    public ushort ReadTimeout { get; set; }//Serial read timeout in ms
+    public ushort ConnectionWait { get; set; }//How long to wait before polling for new device connection and resetting serial comms
+    public ushort ReConnectionWait { get; set; }//How long to wait before polling for reconnection and resend media info
+    public ushort MediaCheck { get; set; }//How long to wait before
+    public ushort ConfigCheck { get; set; }
+    public ushort OracleReadyWait { get; set; }
+    public ushort DisconnectedWait { get; set; }
+    public bool LogContinuous { get; set; }
+};
 class ConfigHandler
 {
     public const string default_path = "config.yaml";
     public const string wallpapers_path = "Wallpapers";
-    private static readonly DeviceHandler.Oracle_Configuration default_oracle_config = new()
+    private static readonly Oracle_Configuration default_oracle_config = new()
     {
         ComPort = "COM3",
         VolumeSensitivity = 5,
         VolumeSensitivityOptions = new() { 1, 3, 5 },
         PlaybackDevice = "Default Device",
-        AlbumArtist = false,
-        MonitoredProgram = new() {  "vlc.exe" },
         WallpaperMode = false,
         WallpaperPeriod = 5,
+        AlbumArtist = false,
+        MonitoredProgram = new() {  "vlc.exe" },
         WallpaperTitle = "Wallpaper mode",
         WallpaperAlbum = " ",
         WallpaperArtist = " ",
@@ -52,13 +76,12 @@ class ConfigHandler
         LogContinuous = false,
 
     };
-    const string default_config = @"
-#Configuration file
+    const string default_config = @"#Configuration file
 
 #Port can be found in the system tray menu or through Device Manager on windows.
-ComPort: COM3
+ComPort: COM4
 #Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu too
-VolumeSensitivity: 1
+VolumeSensitivity: 3
 VolumeSensitivityOptions:
 - 1
 - 3
@@ -66,19 +89,20 @@ VolumeSensitivityOptions:
 #Playback device can be selected through the menu. Default will listen to OS for device focus. 
 #But if multiple audio devices are used, like mics and multiple speakers, specifying this will force the volume knob to control only that device
 PlaybackDevice: Default Device
+#Wallpaper mode for cycling through images in Wallpapers folder
+WallpaperMode: false
+#Non UI Settings
+#How long before image changes in minutes
+WallpaperPeriod: 5
 #Change this if you want the album artist displayed instead of the artist, or vice versa
 AlbumArtist: false
 #Change which programs Thoth's Oracle listens to. Case insenstive.
 #If multiple are provided, their order represents their priority (top is first). Only the highest active program will be used.
 #If none are provided or none listed are found, program will not listen to any. This is to prevent some programs that drop their sessions when changing tracks
 MonitoredProgram:
-- MusIcBEe.exe
-- vlc.exe
 - fireFOX.exe
-#Wallpaper mode for cycling through images in Wallpapers folder
-WallpaperMode: false
-#How long before image changes in minutes
-WallpaperPeriod: 5
+- musicbee.exe
+- vlc.exe
 #Display the following text when in wallpaper mode
 WallpaperTitle: 'Wallpaper Mode'
 WallpaperAlbum: ' '
@@ -96,7 +120,7 @@ ConfigCheck: 1000
 OracleReadyWait: 1000
 DisconnectedWait: 4000
 LogContinuous: false
-    ";
+";
     private static void ExceptionHandler(Exception exception)
     {
         switch (exception)
@@ -116,7 +140,7 @@ LogContinuous: false
         }
     }
 
-    public static DeviceHandler.Oracle_Configuration LoadConfig(string configurationFile = default_path)
+    public static Oracle_Configuration LoadConfig(string configurationFile = default_path)
     {
         try
         {
@@ -125,7 +149,7 @@ LogContinuous: false
 
             var deserializerr = deserializerBuilder.Build();
 
-            var result = deserializerr.Deserialize<DeviceHandler.Oracle_Configuration>(input);
+            var result = deserializerr.Deserialize<Oracle_Configuration>(input);
             return result;
         }
         catch (Exception ex)
@@ -135,7 +159,7 @@ LogContinuous: false
         }
         return default_oracle_config;
     }
-    public static void SaveConfig(DeviceHandler.Oracle_Configuration config, string configurationFile = default_path)
+    public static void SaveConfig(Oracle_Configuration config, string configurationFile = default_path)
     {
         try
         {
@@ -144,15 +168,21 @@ LogContinuous: false
             string yaml = serializer.Serialize(config);
             List<string> yamls = yaml.Split('\n').ToList();
             int line = 0;
+            bool non_ui = false;
             using (StreamReader stream = new(configurationFile))
             {
                 string? ss = stream.ReadLine();
                 while (ss != null)
                 {
-                    if (ss == "" || ss.StartsWith('#'))
+                    if (!non_ui && (ss == "" || ss.StartsWith('#')))
                     {
                         yamls.Insert(line, ss + "\r");
+                        non_ui = ss.Equals("#Non UI Settings");
+                        if (non_ui)
+                            yamls.RemoveRange(line + 1, yamls.Count - (line + 1));
                     }
+                    else
+                        yamls.Add(ss + "\r");
                     line++;
                     ss = stream.ReadLine();
                 }
@@ -193,7 +223,7 @@ LogContinuous: false
     }
     private static void OnChanged(object sender, FileSystemEventArgs e)
     {
-        DeviceHandler.WriteLog("Config changed");
+        DeviceHandler.WriteLog("Config changed ");
         Thread.Sleep(500);
         GUI.media_writer_queue.TryEnqueue(DeviceHandler.GeneralSetup);
     }
