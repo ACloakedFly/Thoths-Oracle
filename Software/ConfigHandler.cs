@@ -79,7 +79,7 @@ class ConfigHandler
     const string default_config = @"#Configuration file
 
 #Port can be found in the system tray menu or through Device Manager on windows.
-ComPort: COM4
+ComPort: COM3
 #Choose a volume from the list below. If none match what you want, edit or add to the list. This will update the options in the GUI menu too
 VolumeSensitivity: 3
 VolumeSensitivityOptions:
@@ -98,17 +98,21 @@ WallpaperPeriod: 5
 AlbumArtist: false
 #Change which programs Thoth's Oracle listens to. Case insenstive.
 #If multiple are provided, their order represents their priority (top is first). Only the highest active program will be used.
-#If none are provided or none listed are found, program will not listen to any. This is to prevent some programs that drop their sessions when changing tracks
+#If none are provided or none listed are found, program will not listen to any. This is to prevent some programs that drop their sessions when changing tracks.
+#Windows 11 is on some other level. Windows 10 used normal app IDs, but 11 obfuscates it for some reason. 
+#If your media source isn't listed below, check out session_IDs.txt in the logs folder for a list of running media sources. Copy and paste the ID into the list below.
 MonitoredProgram:
-- fireFOX.exe
+- fireFOX.exe #On windows 11 use 308046B0AF4A39CB
 - musicbee.exe
-- vlc.exe
+#- vlc.exe
+#- SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify
+
 #Display the following text when in wallpaper mode
 WallpaperTitle: 'Wallpaper Mode'
 WallpaperAlbum: ' '
 WallpaperArtist: ' '
 
-#Nitty gritty tuning. These values should be good for most circumstances
+#Nitty gritty tuning. These values should be good for most circumstances.
 #Speed is unused
 Speed: 9600
 WriteTimeout: 5000
