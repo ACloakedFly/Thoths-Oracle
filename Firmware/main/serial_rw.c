@@ -236,17 +236,19 @@ static void process_dur_pos(void){
     if(xSemaphoreTake(info_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
         memset(song_pos_bytes, 0, DUR_POS_BYTES);
         read_status = usb_serial_jtag_read_bytes(&song_pos_bytes, DUR_POS_BYTES, portDelay);
-        song_duration = song_pos_bytes[4] + (song_pos_bytes[5] << 8) + (song_pos_bytes[6] << 16) + (song_pos_bytes[7] << 24);
-        //Some applications do not broadcast a song duration or position. In that case, we don't want to reset the position everytime the play status changes (ie paused/unpaused)
-        if(!(song_duration == 0 && header.height == 0)){
-            //When the song duration is 0 and the frame_height is 0, we know that the host is telling us that the song was only paused/unpaused and no position will be sent
-            //So we won't let ui_task know that anything changed. ui_task handles incrementing the position. 
-            //If we tell ui_task the position has changed, it will reset it to zero everytime we unpause since we have no accurate position here (it's 0)
-            //Otherwise, we have a duration and accurate position, or the track changed, 
-            //so we will want to update the position, or reset it to 0 
-            position_dirty = true;
+        if(header.duration == 0){
+            song_duration = song_pos_bytes[4] + (song_pos_bytes[5] << 8) + (song_pos_bytes[6] << 16) + (song_pos_bytes[7] << 24);
+            //Some applications do not broadcast a song duration or position. In that case, we don't want to reset the position everytime the play status changes (ie paused/unpaused)
+            if(!(song_duration == 0 && header.height == 0)){
+                //When the song duration is 0 and the frame_height is 0, we know that the host is telling us that the song was only paused/unpaused and no position will be sent
+                //So we won't let ui_task know that anything changed. ui_task handles incrementing the position. 
+                //If we tell ui_task the position has changed, it will reset it to zero everytime we unpause since we have no accurate position here (it's 0)
+                //Otherwise, we have a duration and accurate position, or the track changed, 
+                //so we will want to update the position, or reset it to 0 
+                position_dirty = true;
+            }
+            song_position = song_pos_bytes[0] + (song_pos_bytes[1] << 8) + (song_pos_bytes[2] << 16) + (song_pos_bytes[3] << 24);
         }
-        song_position = song_pos_bytes[0] + (song_pos_bytes[1] << 8) + (song_pos_bytes[2] << 16) + (song_pos_bytes[3] << 24);
         //Song position seems to lag a little, so we give it a boost here. Not really sure if it makes it more accurate on aaverage, but feels better
         song_position++;
         //Host sends play status in the frame_header
