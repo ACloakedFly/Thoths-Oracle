@@ -294,6 +294,7 @@ class DeviceHandler
     private static void GsmtcsSessionsChanged(GlobalSystemMediaTransportControlsSessionManager manager, SessionsChangedEventArgs? args)
     {
         List<string> sessions = new();
+        string session_AUMIDs = "\n";
         IReadOnlyList<GlobalSystemMediaTransportControlsSession> session_list = manager.GetSessions();
         if (session_list.Count < 1 || config.MonitoredProgram.Count < 1)
         {
@@ -303,7 +304,9 @@ class DeviceHandler
         foreach (var session in session_list)
         {
             sessions.Add(session.SourceAppUserModelId);
+            session_AUMIDs = string.Concat(session_AUMIDs, session.SourceAppUserModelId, "\n");
         }
+        WriteLog(session_AUMIDs, true, log_dir + "session_IDs.txt");
         int index = -1;
         GlobalSystemMediaTransportControlsSession new_session = manager.GetCurrentSession();
         foreach (string monitored_session in config.MonitoredProgram)
