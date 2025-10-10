@@ -89,7 +89,7 @@ namespace Contexts
 
         private GUI()
         {
-            string icon_paths = "Icons_Images\\";
+            string icon_paths = "..\\Icons_Images\\";
             string path_icon = icon_paths + "huge.png";
             Image logo_img = SystemIcons.Application.ToBitmap();
             Image exit_symbol = SystemIcons.Error.ToBitmap();
@@ -228,7 +228,7 @@ namespace Contexts
                 return;
             ToolStripDropDownMenu dropDown = (ToolStripDropDownMenu)sender;
             dropDown.AutoClose = false;
-            if (dropDown.OwnerItem.Text.Equals("Playback Devices"))
+            if (dropDown.OwnerItem != null && dropDown.OwnerItem.Text != null && dropDown.OwnerItem.Text.Equals("Playback Devices"))
                 GetAudioDevices();
         }
         private void GetPorts(object? sender, EventArgs args)
@@ -290,6 +290,8 @@ namespace Contexts
         private static void ResetList(object sender)
         {
             ToolStripItem sender_item = (ToolStripItem)sender;
+            if (sender_item.OwnerItem == null)
+                return;
             ToolStripMenuItem dropDown = (ToolStripMenuItem)sender_item.OwnerItem;
             foreach (ToolStripItem tool in dropDown.DropDownItems)
             {
