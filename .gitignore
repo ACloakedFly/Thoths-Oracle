@@ -14,3 +14,7 @@ production/
 *backups/
 *.FCBak
 *.lck
+venv/
+__pycache__/
+config/
+wallpapers/
