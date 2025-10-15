@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net7.0-windows10.0.17763.0</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.22000.0</TargetFramework>
     <Architecture>win-x64</Architecture>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Nullable>enable</Nullable>
@@ -14,7 +14,7 @@
     <SelfContained>true</SelfContained>
 
     <NoWarn>$(NoWarn);NU1701</NoWarn>
-    <ApplicationIcon>Icons_Images\\logo.ico</ApplicationIcon>
+    <ApplicationIcon>..\\Icons_Images\\logo.ico</ApplicationIcon>
     <Copyright>© 2025 Dominique Negm</Copyright>
     <Version>1.1.0</Version>
     <FileVersion>1.6.2</FileVersion>
