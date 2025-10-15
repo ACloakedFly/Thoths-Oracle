@@ -1,3 +1,4 @@
+altgraph==0.17.4
 attrs==23.2.0
 Babel==2.10.3
 bcc==0.29.1
@@ -58,15 +59,20 @@ pydantic==1.10.14
 pydbus==0.6.0
 Pygments==2.17.2
 PyGObject==3.48.2
+PyGObject-stubs==2.13.0
+pyinstaller==6.16.0
+pyinstaller-hooks-contrib==2025.9
 PyJWT==2.7.0
 PyNaCl==1.5.0
 pyparsing==3.1.1
 pyrsistent==0.20.0
 pyserial==3.5
+pystray==0.19.5
 python-apt==2.7.7+ubuntu5
 python-dateutil==2.8.2
 python-debian==0.1.49+ubuntu2
 python-magic==0.4.27
+python-xlib==0.33
 pytz==2024.1
 pyxdg==0.28
 PyYAML==6.0.1

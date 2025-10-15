@@ -1,0 +1,11 @@
+#Example desktop entry
+#Modify Exec, Path, and Icon based on where you have placed the program
+[Desktop Entry]
+Type=Application
+Name=Thoths Oracle
+Comment=Media Companion
+Exec=/home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
+Path=/home/dominique/Documents/Programs/Thoths_Oracle_linux/
+Icon=/home/dominique/Documents/Programs/Thoths_Oracle_linux/Icons_Images/huge.png
+Terminal=false
+Categories=AudioVideo
