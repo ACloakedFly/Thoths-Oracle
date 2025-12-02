@@ -87,7 +87,35 @@ Someone ask me something, please.
 
 # Installation
 
+### Windows
+
 Companion app is provided as portable application that doesn't need installation. Just download and extract the software file for your system wherever you want and run it!
+
+### Linux (Tested on Ubuntu)
+
+- Extract folder to desired location.
+- Edit .desktop file to match new location if you want app to appear in Apps list.
+- Validate and install
+```
+desktop-file-validate thoths_oracle.desktop
+desktop-file-install thoths_oracle.desktop
+```
+- Check which port Oracle is connected to. It should show up as USB ACM device.
+- Verify the device's group permissions are rw and note the group.
+- Verify you are part of the group.
+- Reboot
+#### Example
+
+```
+$ sudo dmesg | grep tty
+[    0.139832] printk: legacy console [tty0] enabled
+[    6.652489] cdc_acm 1-5.2.2:1.0: ttyACM0: USB ACM device
+$ sudo chmod g-+rw /dev/ttyACM0
+$ ls -ld /dev/ttyACM0
+crw-rw---- 1 root dialout 166, 0 Dec  2 18:21 /dev/ttyACM0
+$ sudo usermod -a -G dialout dominique
+$ sudo reboot
+```
 
 ## Instructions for making app launch on startup (Section WIP)
 
