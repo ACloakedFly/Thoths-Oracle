@@ -91,6 +91,10 @@ Someone ask me something, please.
 
 Companion app is provided as portable application that doesn't need installation. Just download and extract the software file for your system wherever you want and run it!
 
+To launch on startup:
+- Right click on .exe and select 'Create shortcut'
+- Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+
 ### Linux (Tested on Ubuntu)
 
 - Extract folder to desired location.
@@ -117,7 +121,11 @@ $ sudo usermod -a -G dialout dominique
 $ sudo reboot
 ```
 
-## Instructions for making app launch on startup (Section WIP)
+To launch on startup using using Startup Applications Preferences:
+-  Add a new entry named Thoths Oracle.
+-  Change the command to the location you extracted Thoth's Oracle in.
+    - eg. /home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
+- Add a comment if desired and save.
 
 ### Windows
 - Right click on .exe and select 'Create shortcut'
