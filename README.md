@@ -1,6 +1,6 @@
 # Thoth's Oracle
 
-USB operated media display/controller for Windows(, Linux, MacOS WIP).
+USB operated media display/controller for Windows, Linux(, MacOS WIP).
 
 USB music display helps you keep track of what you are listening to without taking up precious screen space. Thoth's Oracle provides a one stop shop for checking on the current media information and basic controls such as skipping tracks, playing and pausing and adjusting the volume.
 ![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4854.JPG)
@@ -87,9 +87,45 @@ Someone ask me something, please.
 
 # Installation
 
+### Windows
+
 Companion app is provided as portable application that doesn't need installation. Just download and extract the software file for your system wherever you want and run it!
 
-## Instructions for making app launch on startup (Section WIP)
+To launch on startup:
+- Right click on .exe and select 'Create shortcut'
+- Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+
+### Linux (Tested on Ubuntu)
+
+- Extract folder to desired location.
+- Edit .desktop file to match new location if you want app to appear in Apps list.
+- Validate and install
+```
+desktop-file-validate thoths_oracle.desktop
+desktop-file-install thoths_oracle.desktop
+```
+- Check which port Oracle is connected to. It should show up as USB ACM device.
+- Verify the device's group permissions are rw and note the group.
+- Verify you are part of the group.
+- Reboot
+#### Example
+
+```
+$ sudo dmesg | grep tty
+[    0.139832] printk: legacy console [tty0] enabled
+[    6.652489] cdc_acm 1-5.2.2:1.0: ttyACM0: USB ACM device
+$ sudo chmod g-+rw /dev/ttyACM0
+$ ls -ld /dev/ttyACM0
+crw-rw---- 1 root dialout 166, 0 Dec  2 18:21 /dev/ttyACM0
+$ sudo usermod -a -G dialout dominique
+$ sudo reboot
+```
+
+To launch on startup using using Startup Applications Preferences:
+-  Add a new entry named Thoths Oracle.
+-  Change the command to the location you extracted Thoth's Oracle in.
+    - eg. /home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
+- Add a comment if desired and save.
 
 ### Windows
 - Right click on .exe and select 'Create shortcut'
