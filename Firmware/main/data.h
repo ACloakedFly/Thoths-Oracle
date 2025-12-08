@@ -47,6 +47,10 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include "driver/pulse_cnt.h"
 #include "esp_lcd_ili9341.h"
 #include "esp_task_wdt.h"
+#include <sys/stat.h>
+#include <unistd.h>
+#include "esp_system.h"
+#include "esp_littlefs.h"
 
 #define UTF8 1
 #define UTF16 2
@@ -85,6 +89,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define STATUS_TAG      7
 #define FINISHED_TAG    8
 #define ERROR_TAG       9
+#define GIF_TAG         10
 
 //Display
 #define PIN_NUM_SCLK        11
