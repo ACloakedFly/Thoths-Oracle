@@ -124,7 +124,7 @@ void ui_setup(void *pvParameters){
     lv_init();
     // alloc draw buffers used by LVGL
     // it's recommended to choose the size of the draw buffer(s) to be at least 1/10 screen sized
-    buf1 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DEFAULT);
+    buf1 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DMA);
     assert(buf1);
     buf2 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DMA);
     assert(buf2);

@@ -290,6 +290,8 @@ def data_handler(*args):
                 img.save(filename='thumby.png')
                 pixels = img.export_pixels(channel_map="RGB")
                 rgb565 = convert_to_565(pixels)
+                byte_file = open("bytes.txt", "wb")
+                byte_file.write(rgb565)
                 writer_queue.put(dict(tag=1, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
 
     #Playback changed

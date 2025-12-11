@@ -51,6 +51,8 @@ int length = 0;
 char header_buffer[HEADER_BYTES];
 uint16_t read_status = 0;
 
+static FILE *gif_ptr;
+
 typedef struct frame_header{
     uint8_t tag;
     uint32_t length;
@@ -61,6 +63,8 @@ typedef struct frame_header{
 
 frame_header header = {0, 0, 0, 0, 0};
 static const frame_header empty_header = {0, 0, 0, 0, 0};
+
+bool gif_enabled = false, gif_writing = false;
 
 sys_time system_time = {0, 0, 0, 0};
 
@@ -106,6 +110,14 @@ static uint8_t frame_start(void){
         return 0;
     }
     frame_metadata(NULL);
+    if(header.tag == GIF_TAG){
+        gif_ptr = fopen("/littlefs/gif_bytes", "w");
+        gif_writing = true;
+        gif_enabled = true;
+    }
+    else{
+        gif_enabled = false;
+    }
     //Let superloop know that data is incoming
     idle = false;
     return 1;
@@ -114,6 +126,10 @@ static uint8_t frame_start(void){
 //Call this at the end of the data frame to reset counters and go back to idling
 static void frame_end(char *end_mes){
     idle = true;
+    if(header.tag == GIF_TAG){
+        fclose(gif_ptr);
+        gif_writing = false;
+    }
     memset(header_buffer, 0, HEADER_BYTES);
     header = empty_header;
     char mes[32] = {0};
@@ -146,7 +162,7 @@ static void error_reset(uint8_t erre){
 
 //Check header for common errors, like nonsense tag or too much data. Reset if anything is wrong and return error code. Return 1 if everything is alright
 static uint8_t error_check(void){
-    if(header.tag > DUR_POS_TAG || header.tag == 0){
+    if((header.tag > DUR_POS_TAG && header.tag != GIF_TAG) || header.tag == 0){
         error_reset(2);
         return 2;
     }
@@ -178,6 +194,29 @@ static void process_image(void){
     //The RX buffer will and empty properly without additional buffering. At least it has in testing
     if(xSemaphoreTake(img_mutex, pdMS_TO_TICKS(10)) == pdTRUE){
         read_status = usb_serial_jtag_read_bytes(&album_cover[img_counter], RX_BUF_SIZE, portDelay);
+        img_dirty = true;//Set dirty flag so ui_task knows that we changed the array
+        xSemaphoreGive(img_mutex);
+        if(read_status == 0){//No data read. That's weird. We are only here because an image header was sent to us. Image data should have been next
+            frame_end("no image");
+        }
+        else{//Increment img_counter so that on the next pass we know where in the array to place the data
+            img_counter += read_status;
+        }
+        if(img_counter >= header.length){//We have read the expected number of bytes, or a little more (uh-oh). Ready up for new frame and let host know
+            frame_end("image");
+        }
+    }
+    else{
+        serial_jtag_write(INFO_TAG, "Image packet missed, mutex blocked\0", 35, portDelay);
+    }
+}
+
+uint8_t gif_buf[RX_BUF_SIZE];
+
+static void process_gif(void){
+    if(xSemaphoreTake(img_mutex, pdMS_TO_TICKS(10)) == pdTRUE){
+        read_status = usb_serial_jtag_read_bytes(&gif_buf[0], RX_BUF_SIZE, portDelay);
+        fwrite(gif_buf, sizeof(gif_buf[0]), RX_BUF_SIZE, gif_ptr);
         img_dirty = true;//Set dirty flag so ui_task knows that we changed the array
         xSemaphoreGive(img_mutex);
         if(read_status == 0){//No data read. That's weird. We are only here because an image header was sent to us. Image data should have been next

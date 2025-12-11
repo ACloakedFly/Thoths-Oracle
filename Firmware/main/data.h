@@ -104,6 +104,11 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define IMG_HEIGHT  304
 #define IMG_SIZE IMG_HEIGHT*IMG_WIDTH*2//Images are in RGB565 format so every pixel needs 2 bytes
 
+//GIF
+#define GIF_WIDTH 180//172
+#define GIF_HEIGHT 180//172
+#define GIF_SIZE GIF_WIDTH*GIF_HEIGHT*2 
+
 //Text, added multiple opions to allow for faster testing, can ignore this section
 #define TEXT_SIZE 512
 #if BITS == 1

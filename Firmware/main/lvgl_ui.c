@@ -21,6 +21,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 // lvgl_ui.c
 
 #include "data.h"
+#include <time.h>
 
 //Thumbnail image header
 const lv_img_dsc_t img_cover_rgb = {
@@ -32,11 +33,24 @@ const lv_img_dsc_t img_cover_rgb = {
   .data = album_cover,
 };
 
-//lv_gif_t 
+//GIF image header
+const lv_img_dsc_t gif_rgb = {
+  .header.always_zero = 0,
+  .header.w = GIF_WIDTH,
+  .header.h = GIF_HEIGHT,
+  .data_size = GIF_SIZE,
+  .header.cf = LV_IMG_CF_TRUE_COLOR,
+  .data = album_cover,
+};
+
+uint32_t gif_size = 0;
+uint32_t gif_counter = 0;
+FILE *gif_ptr;
 
 
-static lv_obj_t *l_album, *ld_album, *l_artist, *ld_artist, *l_title, *ld_title, *img_cover, *ld_dur,
+static lv_obj_t *l_album, *ld_album, *l_artist, *ld_artist, *l_title, *ld_title, *img_cover, *ld_dur, *gif,
  *ld_pos, *ld_bar, *ld_date, *ld_time, *ll_line;
+
 static lv_disp_rot_t rotation = LV_DISP_ROT_NONE;
 //char name_info[50];
 bool updated = false;
@@ -56,6 +70,7 @@ static uint8_t sys_last_min = 0;
 static sys_time ui_time = {0, 0, 0, 0};
 //Timer for updating song position and system time
 lv_timer_t *song_time;
+lv_timer_t *gif_time;
 //Bool for checking if song is playing, increment song position when true. Bool for updating song metadata only when text has changed
 static bool song_play = false;
 static bool pos_dirty = false;
@@ -64,19 +79,24 @@ static bool dur_dirty = false;
 lv_point_t points[] = {{12,26}, {308,26}};
 
 static void update_timer(lv_timer_t * timer);
+static void gif_timer(lv_timer_t * timer);
 //Styles for general objects
 static lv_style_t style;
+
+esp_vfs_littlefs_conf_t conf = {
+    .base_path = "/littlefs",
+    .partition_label = "storage",
+    .format_if_mount_failed = true,
+    .dont_mount = false,
+};
+
+
+static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode);
 
 void little_fs(void)
 {
     ESP_LOGI(TAG, "Initializing LittleFS");
 
-    esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/littlefs",
-        .partition_label = "storage",
-        .format_if_mount_failed = true,
-        .dont_mount = false,
-    };
 
     // Use settings defined above to initialize and mount LittleFS filesystem.
     // Note: esp_vfs_littlefs_register is an all-in-one convenience function.
@@ -106,12 +126,39 @@ void little_fs(void)
     // First create a file.
     ESP_LOGI(TAG, "Opening file");
     FILE *f = fopen("/littlefs/hello.txt", "w");
+    gif_ptr = fopen("/littlefs/bytes", "r");
     if (f == NULL) {
         ESP_LOGE(TAG, "Failed to open file for writing");
         return;
     }
+    if (gif_ptr == NULL) {
+        ESP_LOGE(TAG, "Failed to open gif for reading");
+        return;
+    }
+    char frame[304];
+    fgets(frame, sizeof(frame), gif_ptr);
+    ESP_LOGI(TAG, "Read from gif: '%s'", frame);
+    fseek(gif_ptr, 0, SEEK_SET);
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+    fread(&album_cover[0], sizeof album_cover[0], IMG_SIZE, gif_ptr);
+
+    for(int i = 0; i < sizeof(frame); i+=2){
+        r = (frame[i] & 0xF8);
+        g = ((frame[i] & 0x07) << 5) | ((frame[i+1] >> 3) & 0x1C);
+        b = (frame[i+1] & 0x1f) << 3;
+        printf("#%02x%02x%02x, ", r,g,b);
+    }
     fprintf(f, "Hello World!\n");
     fclose(f);
+    fclose(gif_ptr);
+    gif_ptr = fopen("/littlefs/gif_bytes", "r");
+    fseek(gif_ptr, 0, SEEK_END);
+    gif_size = ftell(gif_ptr);
+    rewind(gif_ptr);
+    gif_counter = fread(&album_cover[0], sizeof album_cover[0], GIF_SIZE, gif_ptr);
+    fclose(gif_ptr);
     ESP_LOGI(TAG, "File written");
 
     // Check if destination file exists before renaming
@@ -160,10 +207,63 @@ void little_fs(void)
         *pos = '\0';
     }
     ESP_LOGI(TAG, "Read from file: '%s'", line);
-
     // All done, unmount partition and disable LittleFS
-    esp_vfs_littlefs_unregister(conf.partition_label);
-    ESP_LOGI(TAG, "LittleFS unmounted");
+    //esp_vfs_littlefs_unregister(conf.partition_label);
+    //ESP_LOGI(TAG, "LittleFS unmounted");
+}
+
+
+static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode)
+{
+    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
+    void * f = NULL;
+
+    if(mode == LV_FS_MODE_WR) {
+        /*Open a file for write*/
+        f = fopen(path, "w");
+    }
+    else if(mode == LV_FS_MODE_RD) {
+        /*Open a file for read*/
+        f = fopen(path, "r");
+    }
+    else if(mode == (LV_FS_MODE_WR | LV_FS_MODE_RD)) {
+        /*Open a file for read and write*/
+        f = fopen(path, "w+");
+    }
+
+    return f;
+}
+
+
+static lv_fs_res_t fs_close(lv_fs_drv_t * drv, void * file_p)
+{
+    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
+
+    if(fclose(file_p) == 0) res = LV_FS_RES_OK;
+
+    return res;
+}
+
+
+static lv_fs_res_t fs_read(lv_fs_drv_t * drv, void * file_p, void * buf, uint32_t btr, uint32_t * br)
+{
+    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
+    /*Add your code here*/
+    size_t read = fread(buf, sizeof buf[0], btr, file_p);
+    if(read == btr) res = LV_FS_RES_OK;
+
+    return res;
+}
+
+
+static lv_fs_res_t fs_write(lv_fs_drv_t * drv, void * file_p, const void * buf, uint32_t btw, uint32_t * bw)
+{
+    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
+
+    *bw = fwrite(buf, sizeof buf[0], btw, file_p);
+    if(*bw == btw) res = LV_FS_RES_OK;
+
+    return res;
 }
 
 void lvgl_ui(lv_disp_t *disp)
@@ -227,7 +327,13 @@ void lvgl_ui(lv_disp_t *disp)
     //Album cover
     img_cover = lv_img_create(scr);
     lv_img_set_src(img_cover, &img_cover_rgb);
-    lv_obj_align(img_cover, LV_ALIGN_CENTER, 0, 54);
+    lv_obj_align(img_cover, LV_ALIGN_CENTER, 600, 54);
+
+    //GIF
+    gif = lv_img_create(scr);
+    lv_img_set_src(gif, &gif_rgb);
+    lv_obj_align(gif, LV_ALIGN_CENTER, 0, 54);
+    //lv_img_set_zoom(gif, (float)((float)IMG_WIDTH/(float)GIF_WIDTH)*256);
 
     //Song duration
     ld_dur = lv_label_create(scr);
@@ -279,6 +385,41 @@ void lvgl_ui(lv_disp_t *disp)
     song_time = lv_timer_create(update_timer, 1000, NULL);
     lv_timer_set_repeat_count(song_time, -1);
     lv_timer_ready(song_time);
+
+    //gif_ptr = fopen("/littlefs/gif_bytes", "r");
+    gif_time = lv_timer_create(gif_timer, 120, NULL);
+    lv_timer_set_repeat_count(gif_time, -1);
+    lv_timer_ready(gif_time);
+
+    ESP_LOGI(TAG, "GIF base");
+    static lv_fs_drv_t drv;                   /*Needs to be static or global*/
+    lv_fs_drv_init(&drv);                     /*Basic initialization*/
+    drv.letter = 'A'; 
+    drv.cache_size = 0;           /*Cache size for reading in bytes. 0 to not cache.*/
+
+    drv.open_cb = fs_open;
+    drv.close_cb = fs_close;
+    //drv.read_cb = fs_read;
+    //drv.write_cb = fs_write;
+    
+
+    lv_fs_drv_register(&drv);
+
+    ESP_LOGI(TAG, "lv_fs driver registered");
+    
+    //res = lv_fs_open(&f, "A:/littlefs/bulb.gif", LV_FS_MODE_RD);
+    //ESP_LOGI(TAG, "file found? %d", res);
+    //if(res != LV_FS_RES_OK) ESP_LOGI(TAG, "GIF not found");
+    //GIF
+    //LV_IMG_DECLARE(img_bulb_gif);
+    //gif = lv_gif_create(scr);
+    //lv_gif_set_src(gif, "A:/littlefs/bulb.gif");
+    //lv_gif_set_src(gif, &icon_title_rgb);
+    //lv_obj_align(gif, LV_ALIGN_TOP_LEFT, 200, 72);
+
+    //l_album = lv_img_create(scr);
+    //lv_img_set_src(l_album, "A:/littlefs/small.bin");
+    //lv_obj_align(l_album, LV_ALIGN_TOP_LEFT, 200, 72);
 
     ESP_LOGI(TAG, "LVGL Done, onto update");
 }
@@ -337,6 +478,30 @@ static void decode_unicode(){
     lv_label_set_text(ld_title, (char*)wide_data);
     lv_label_set_text(ld_album, (char*)(&wide_data[album_i]));
     lv_label_set_text(ld_artist, (char*)(&wide_data[artist_i]));
+}
+
+clock_t start = 0;
+clock_t end = 0;
+//GIF Timer
+//set timer to new timer with period of header.duration when gif_mode is true for first time
+//Disable timer whenever any other tag is received
+//Check mutex before reading file and before reading cover buffer
+static void gif_timer(lv_timer_t * timer){
+    gif_ptr = fopen("/littlefs/gif_bytes", "r");
+    fseek(gif_ptr, gif_counter, SEEK_SET);
+    gif_counter += fread(&album_cover[0], sizeof(album_cover[0]), GIF_SIZE, gif_ptr);
+    //printf("%lf\n", (double)((end-start)/(double)CLOCKS_PER_SEC));
+    if(gif_counter >= gif_size - (GIF_SIZE-200)){
+        gif_counter = 0;
+        rewind(gif_ptr);
+    }
+    fclose(gif_ptr);
+    lv_img_set_src(gif, &gif_rgb);
+    char mes[10] = {0};
+    //end = clock();
+    //sprintf(mes, "%lf\n", (double)((end-start)/(double)CLOCKS_PER_SEC));
+    //serial_jtag_write(INFO_TAG, mes, 10, portDelay);
+    //start = clock();
 }
 
 //Timer for updating song position and date/time
