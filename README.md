@@ -114,7 +114,7 @@ desktop-file-install thoths_oracle.desktop
 $ sudo dmesg | grep tty
 [    0.139832] printk: legacy console [tty0] enabled
 [    6.652489] cdc_acm 1-5.2.2:1.0: ttyACM0: USB ACM device
-$ sudo chmod g-+rw /dev/ttyACM0
+$ sudo chmod g+rw /dev/ttyACM0
 $ ls -ld /dev/ttyACM0
 crw-rw---- 1 root dialout 166, 0 Dec  2 18:21 /dev/ttyACM0
 $ sudo usermod -a -G dialout dominique
