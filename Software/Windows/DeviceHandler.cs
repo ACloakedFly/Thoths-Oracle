@@ -381,7 +381,7 @@ class DeviceHandler
         catch (COMException ex)
         {
             queued_media = true;
-            WriteLog(ex.ToString());
+            SerialExceptionHandler(ex);
             media_mutex.Release();
             return 3;
         }
@@ -541,6 +541,11 @@ class DeviceHandler
             case InvalidOperationException:
                 serial_tip.title = "Com Port Closed";
                 log_message = "The port is closed or another being is attempting communication. Terminate the intermeddler.";
+                WriteLog(log_message, true, null, serial_tip);
+                break;
+            case COMException:
+                serial_tip.title = "Thoth Disconnected";
+                log_message = "Thoth has lost contact. What is this blasphemy?";
                 WriteLog(log_message, true, null, serial_tip);
                 break;
             default:
