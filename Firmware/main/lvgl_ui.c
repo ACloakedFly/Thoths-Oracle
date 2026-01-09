@@ -90,9 +90,6 @@ esp_vfs_littlefs_conf_t conf = {
     .dont_mount = false,
 };
 
-
-static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode);
-
 void little_fs(void)
 {
     ESP_LOGI(TAG, "Initializing LittleFS");
@@ -125,146 +122,19 @@ void little_fs(void)
     // Use POSIX and C standard library functions to work with files.
     // First create a file.
     ESP_LOGI(TAG, "Opening file");
-    FILE *f = fopen("/littlefs/hello.txt", "w");
-    gif_ptr = fopen("/littlefs/bytes", "r");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for writing");
-        return;
-    }
-    if (gif_ptr == NULL) {
-        ESP_LOGE(TAG, "Failed to open gif for reading");
-        return;
-    }
-    char frame[304];
-    fgets(frame, sizeof(frame), gif_ptr);
-    ESP_LOGI(TAG, "Read from gif: '%s'", frame);
-    fseek(gif_ptr, 0, SEEK_SET);
-    uint8_t r = 0;
-    uint8_t g = 0;
-    uint8_t b = 0;
-    fread(&album_cover[0], sizeof album_cover[0], IMG_SIZE, gif_ptr);
-
-    for(int i = 0; i < sizeof(frame); i+=2){
-        r = (frame[i] & 0xF8);
-        g = ((frame[i] & 0x07) << 5) | ((frame[i+1] >> 3) & 0x1C);
-        b = (frame[i+1] & 0x1f) << 3;
-        printf("#%02x%02x%02x, ", r,g,b);
-    }
-    fprintf(f, "Hello World!\n");
-    fclose(f);
-    fclose(gif_ptr);
     gif_ptr = fopen("/littlefs/gif_bytes", "r");
     fseek(gif_ptr, 0, SEEK_END);
     gif_size = ftell(gif_ptr);
     rewind(gif_ptr);
+    ESP_LOGI(TAG, "GIF size %lu", gif_size);
     gif_counter = fread(&album_cover[0], sizeof album_cover[0], GIF_SIZE, gif_ptr);
     fclose(gif_ptr);
-    ESP_LOGI(TAG, "File written");
-
-    // Check if destination file exists before renaming
-    struct stat st;
-    if (stat("/littlefs/foo.txt", &st) == 0) {
-        // Delete it if it exists
-        unlink("/littlefs/foo.txt");
-    }
-
-    // Rename original file
-    ESP_LOGI(TAG, "Renaming file");
-    if (rename("/littlefs/hello.txt", "/littlefs/foo.txt") != 0) {
-        ESP_LOGE(TAG, "Rename failed");
-        return;
-    }
-
-    // Open renamed file for reading
-    ESP_LOGI(TAG, "Reading file");
-    f = fopen("/littlefs/foo.txt", "r");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for reading");
-        return;
-    }
-
-    char line[128];
-    fgets(line, sizeof(line), f);
-    fclose(f);
-    // strip newline
-    char*pos = strchr(line, '\n');
-    if (pos) {
-        *pos = '\0';
-    }
-    ESP_LOGI(TAG, "Read from file: '%s'", line);
-
-    ESP_LOGI(TAG, "Reading from flashed filesystem example.txt");
-    f = fopen("/littlefs/example.txt", "r");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "Failed to open file for reading");
-        return;
-    }
-    fgets(line, sizeof(line), f);
-    fclose(f);
-    // strip newline
-    pos = strchr(line, '\n');
-    if (pos) {
-        *pos = '\0';
-    }
-    ESP_LOGI(TAG, "Read from file: '%s'", line);
     // All done, unmount partition and disable LittleFS
     //esp_vfs_littlefs_unregister(conf.partition_label);
     //ESP_LOGI(TAG, "LittleFS unmounted");
 }
 
 
-static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode)
-{
-    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
-    void * f = NULL;
-
-    if(mode == LV_FS_MODE_WR) {
-        /*Open a file for write*/
-        f = fopen(path, "w");
-    }
-    else if(mode == LV_FS_MODE_RD) {
-        /*Open a file for read*/
-        f = fopen(path, "r");
-    }
-    else if(mode == (LV_FS_MODE_WR | LV_FS_MODE_RD)) {
-        /*Open a file for read and write*/
-        f = fopen(path, "w+");
-    }
-
-    return f;
-}
-
-
-static lv_fs_res_t fs_close(lv_fs_drv_t * drv, void * file_p)
-{
-    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
-
-    if(fclose(file_p) == 0) res = LV_FS_RES_OK;
-
-    return res;
-}
-
-
-static lv_fs_res_t fs_read(lv_fs_drv_t * drv, void * file_p, void * buf, uint32_t btr, uint32_t * br)
-{
-    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
-    /*Add your code here*/
-    size_t read = fread(buf, sizeof buf[0], btr, file_p);
-    if(read == btr) res = LV_FS_RES_OK;
-
-    return res;
-}
-
-
-static lv_fs_res_t fs_write(lv_fs_drv_t * drv, void * file_p, const void * buf, uint32_t btw, uint32_t * bw)
-{
-    lv_fs_res_t res = LV_FS_RES_NOT_IMP;
-
-    *bw = fwrite(buf, sizeof buf[0], btw, file_p);
-    if(*bw == btw) res = LV_FS_RES_OK;
-
-    return res;
-}
 
 void lvgl_ui(lv_disp_t *disp)
 {
@@ -387,25 +257,10 @@ void lvgl_ui(lv_disp_t *disp)
     lv_timer_ready(song_time);
 
     //gif_ptr = fopen("/littlefs/gif_bytes", "r");
-    gif_time = lv_timer_create(gif_timer, 120, NULL);
+    gif_time = lv_timer_create(gif_timer, 200, NULL);
     lv_timer_set_repeat_count(gif_time, -1);
     lv_timer_ready(gif_time);
 
-    ESP_LOGI(TAG, "GIF base");
-    static lv_fs_drv_t drv;                   /*Needs to be static or global*/
-    lv_fs_drv_init(&drv);                     /*Basic initialization*/
-    drv.letter = 'A'; 
-    drv.cache_size = 0;           /*Cache size for reading in bytes. 0 to not cache.*/
-
-    drv.open_cb = fs_open;
-    drv.close_cb = fs_close;
-    //drv.read_cb = fs_read;
-    //drv.write_cb = fs_write;
-    
-
-    lv_fs_drv_register(&drv);
-
-    ESP_LOGI(TAG, "lv_fs driver registered");
     
     //res = lv_fs_open(&f, "A:/littlefs/bulb.gif", LV_FS_MODE_RD);
     //ESP_LOGI(TAG, "file found? %d", res);
@@ -497,8 +352,10 @@ static void gif_timer(lv_timer_t * timer){
     }
     fclose(gif_ptr);
     lv_img_set_src(gif, &gif_rgb);
-    char mes[10] = {0};
     //end = clock();
+    //char mes[20] = {0};
+    //sprintf(mes, "%lu:%lu\n", gif_counter, gif_size);
+    //serial_jtag_write(INFO_TAG, mes, 20, portDelay);
     //sprintf(mes, "%lf\n", (double)((end-start)/(double)CLOCKS_PER_SEC));
     //serial_jtag_write(INFO_TAG, mes, 10, portDelay);
     //start = clock();

@@ -45,7 +45,8 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include "iot_button.h"
 #include "esp_sleep.h"
 #include "driver/pulse_cnt.h"
-#include "esp_lcd_ili9341.h"
+//#include "esp_lcd_ili9341.h"
+#include "esp_lcd_st7796.h"
 #include "esp_task_wdt.h"
 #include <sys/stat.h>
 #include <unistd.h>

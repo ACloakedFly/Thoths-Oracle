@@ -77,7 +77,8 @@ void ui_setup(void *pvParameters){
         .miso_io_num = PIN_NUM_MISO,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = LCD_H_RES * LCD_BUF * sizeof(lv_color_t),
+        .max_transfer_sz = LCD_H_RES * LCD_V_RES * sizeof(lv_color_t),
+        //.max_transfer_sz = LCD_H_RES * LCD_BUF * sizeof(lv_color_t),
     };
     ESP_ERROR_CHECK(spi_bus_initialize(LCD_HOST, &buscfg, SPI_DMA_CH_AUTO));
 
@@ -105,7 +106,8 @@ void ui_setup(void *pvParameters){
     };
 
     ESP_LOGI(TAG, "Install ILI9341 panel driver");
-    ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(io_handle, &panel_config, &panel_handle));
+    //ESP_ERROR_CHECK(esp_lcd_new_panel_ili9341(io_handle, &panel_config, &panel_handle));
+    ESP_ERROR_CHECK(esp_lcd_new_panel_st7796(io_handle, &panel_config, &panel_handle));
     ESP_LOGI(TAG, "Panel driver installed");
 
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
@@ -124,13 +126,13 @@ void ui_setup(void *pvParameters){
     lv_init();
     // alloc draw buffers used by LVGL
     // it's recommended to choose the size of the draw buffer(s) to be at least 1/10 screen sized
-    buf1 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DMA);
+    buf1 = heap_caps_malloc(LCD_H_RES * 480 * sizeof(lv_color_t), MALLOC_CAP_DEFAULT);
     assert(buf1);
-    buf2 = heap_caps_malloc(LCD_H_RES * LCD_BUF * sizeof(lv_color_t), MALLOC_CAP_DMA);
+    buf2 = heap_caps_malloc(LCD_H_RES * 480 * sizeof(lv_color_t), MALLOC_CAP_DEFAULT);
     assert(buf2);
     
     // initialize LVGL draw buffers
-    lv_disp_draw_buf_init(&disp_buf, buf1, buf2, LCD_H_RES * LCD_BUF);
+    lv_disp_draw_buf_init(&disp_buf, buf1, buf2, LCD_H_RES * 120);
 
     ESP_LOGI(TAG, "Register display driver to LVGL");
     lv_disp_drv_init(&disp_drv);
