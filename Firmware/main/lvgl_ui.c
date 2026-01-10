@@ -52,6 +52,7 @@ static lv_obj_t *l_album, *ld_album, *l_artist, *ld_artist, *l_title, *ld_title,
  *ld_pos, *ld_bar, *ld_date, *ld_time, *ll_line;
 
 static lv_disp_rot_t rotation = LV_DISP_ROT_NONE;
+SemaphoreHandle_t gif_mutex = NULL;
 //char name_info[50];
 bool updated = false;
 
@@ -129,6 +130,8 @@ void little_fs(void)
     ESP_LOGI(TAG, "GIF size %lu", gif_size);
     gif_counter = fread(&album_cover[0], sizeof album_cover[0], GIF_SIZE, gif_ptr);
     fclose(gif_ptr);
+    gif_mutex = xSemaphoreCreateBinary();
+    xSemaphoreGive(gif_mutex);
     // All done, unmount partition and disable LittleFS
     //esp_vfs_littlefs_unregister(conf.partition_label);
     //ESP_LOGI(TAG, "LittleFS unmounted");
@@ -203,7 +206,7 @@ void lvgl_ui(lv_disp_t *disp)
     gif = lv_img_create(scr);
     lv_img_set_src(gif, &gif_rgb);
     lv_obj_align(gif, LV_ALIGN_CENTER, 0, 54);
-    //lv_img_set_zoom(gif, (float)((float)IMG_WIDTH/(float)GIF_WIDTH)*256);
+    //lv_img_set_zoom(gif, (float)((float)280/(float)GIF_WIDTH)*256);
 
     //Song duration
     ld_dur = lv_label_create(scr);
@@ -257,7 +260,7 @@ void lvgl_ui(lv_disp_t *disp)
     lv_timer_ready(song_time);
 
     //gif_ptr = fopen("/littlefs/gif_bytes", "r");
-    gif_time = lv_timer_create(gif_timer, 200, NULL);
+    gif_time = lv_timer_create(gif_timer, 1000/11, NULL);
     lv_timer_set_repeat_count(gif_time, -1);
     lv_timer_ready(gif_time);
 
@@ -342,16 +345,19 @@ clock_t end = 0;
 //Disable timer whenever any other tag is received
 //Check mutex before reading file and before reading cover buffer
 static void gif_timer(lv_timer_t * timer){
-    gif_ptr = fopen("/littlefs/gif_bytes", "r");
-    fseek(gif_ptr, gif_counter, SEEK_SET);
-    gif_counter += fread(&album_cover[0], sizeof(album_cover[0]), GIF_SIZE, gif_ptr);
-    //printf("%lf\n", (double)((end-start)/(double)CLOCKS_PER_SEC));
-    if(gif_counter >= gif_size - (GIF_SIZE-200)){
-        gif_counter = 0;
-        rewind(gif_ptr);
+    if(xSemaphoreTake(gif_mutex, 0) == pdTRUE){  
+        gif_ptr = fopen("/littlefs/gif_bytes", "r");
+        fseek(gif_ptr, gif_counter, SEEK_SET);
+        gif_counter += fread(&album_cover[0], sizeof(album_cover[0]), GIF_SIZE, gif_ptr);
+        //printf("%lf\n", (double)((end-start)/(double)CLOCKS_PER_SEC));
+        if(gif_counter >= gif_size - (GIF_SIZE-200)){
+            gif_counter = 0;
+            rewind(gif_ptr);
+        }
+        fclose(gif_ptr);
+        lv_img_set_src(gif, &gif_rgb);
+        xSemaphoreGive(gif_mutex);
     }
-    fclose(gif_ptr);
-    lv_img_set_src(gif, &gif_rgb);
     //end = clock();
     //char mes[20] = {0};
     //sprintf(mes, "%lu:%lu\n", gif_counter, gif_size);
