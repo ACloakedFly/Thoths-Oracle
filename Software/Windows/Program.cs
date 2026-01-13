@@ -82,17 +82,18 @@ namespace Contexts
         public static bool continue_media = true;
         static Image selected_img = SystemIcons.Exclamation.ToBitmap();
         public static Thread read_thread = new(DeviceHandler.Read);
+        public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
         public static DispatcherQueue media_writer_queue = DispatcherQueue.GetForCurrentThread();
         public static Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
         static readonly Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
 
         private GUI()
         {
-            string icon_paths = "..\\Icons_Images\\";
+            string icon_paths = "Icons_Images\\";
             string path_icon = icon_paths + "huge.png";
             Image logo_img = SystemIcons.Application.ToBitmap();
             Image exit_symbol = SystemIcons.Error.ToBitmap();
-            Bitmap logo_icon = SystemIcons.Error.ToBitmap();
+            Bitmap logo_icon = SystemIcons.Application.ToBitmap();
             try
             {
                 logo_img = Image.FromFile(icon_paths + "small.png");

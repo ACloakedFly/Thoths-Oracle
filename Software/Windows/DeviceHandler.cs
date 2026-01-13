@@ -101,7 +101,6 @@ class DeviceHandler
     private static SemaphoreSlim media_mutex = new(1, 1);
     private static bool disconnect_msg_sent = false;
     private static bool media_com_exception = false;
-    public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
     public class BalloonTip
     {
         public string title = "";
@@ -113,13 +112,13 @@ class DeviceHandler
     private static GlobalSystemMediaTransportControlsSessionManager? gsmtcsm;
     public static void HandlerSetup()
     {
-        config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
-        old_config = config;
-        GUI.oracle_Configuration = config;
         Directory.CreateDirectory(ConfigHandler.wallpapers_path);
         wallpapers = Directory.GetFiles(wallpaper_path).ToList();
         if (debug_log)
             DebugLogs();
+        config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
+        old_config = config;
+        GUI.oracle_Configuration = config;
         GeneralSetup();
         GUI.read_thread.Start();
 
@@ -160,7 +159,7 @@ class DeviceHandler
         reconnect_timer.IsRepeating = true;
         if (!device_connected)
             reconnect_timer.Start();
-        config_thread.Start();
+        GUI.config_thread.Start();
     }
 
     private static void MediaCheck(DispatcherQueueTimer timer, object sender)
