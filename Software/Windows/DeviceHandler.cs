@@ -100,6 +100,8 @@ class DeviceHandler
     private static Mutex reconnect_mutex = new();
     private static SemaphoreSlim media_mutex = new(1, 1);
     private static bool disconnect_msg_sent = false;
+    private static bool media_com_exception = false;
+    public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
     public class BalloonTip
     {
         public string title = "";
@@ -158,6 +160,7 @@ class DeviceHandler
         reconnect_timer.IsRepeating = true;
         if (!device_connected)
             reconnect_timer.Start();
+        config_thread.Start();
     }
 
     private static void MediaCheck(DispatcherQueueTimer timer, object sender)
@@ -166,7 +169,16 @@ class DeviceHandler
             return;
         if (config.WallpaperMode || !queued_media || !device_connected)
             return;
-        Update_Media(gsmtcs, null);
+        if (media_com_exception)
+        {
+            GeneralSetup();
+            previous_control_session = null;
+            media_com_exception = false;
+        }
+        else
+        {
+            Update_Media(gsmtcs, null);
+        }
     }
 
     private static void IncrementWallpaper()
@@ -299,6 +311,7 @@ class DeviceHandler
         if (session_list.Count < 1 || config.MonitoredProgram.Count < 1)
         {
             WriteLog("No sessions or none monitored");
+            previous_control_session = null;
             return;
         }
         foreach (var session in session_list)
@@ -378,20 +391,23 @@ class DeviceHandler
         {
             media_properties = sender.TryGetMediaPropertiesAsync().GetAwaiter().GetResult();
         }
-        catch (COMException ex)
+        catch (COMException)
         {
             queued_media = true;
-            SerialExceptionHandler(ex);
+            media_com_exception = true;
             media_mutex.Release();
             return 3;
         }
+        int title_length = media_properties.Title.Length;
+        int album_length = media_properties.AlbumTitle.Length;
+        int artist_length = config.AlbumArtist ? media_properties.AlbumArtist.Length: media_properties.Artist.Length;
         Info_Buffers info_ = new()
         {
-            Title = media_properties.Title.Length > 0 ? media_properties.Title : "No Data",
-            Album = media_properties.AlbumTitle.Length > 0 ? media_properties.AlbumTitle : "No Data",
-            Artist = media_properties.Artist.Length > 0 ? media_properties.Artist : "No Data"
+            Title = title_length > 0 ? media_properties.Title : "No Data",
+            Album = album_length > 0 ? media_properties.AlbumTitle : "No Data",
+            Artist = artist_length > 0 ? (config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist) : "No Data",
         };
-        info_.Artist = config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist;
+
         new_media = info_.Title + "\n" + info_.Album + "\n" + info_.Artist + "\n";
         if (new_media.Equals(captured_media))
         {
@@ -399,6 +415,14 @@ class DeviceHandler
             queued_media = false;
             return 2;
         }
+
+        if(title_length + album_length + artist_length == 0)
+        {
+            media_mutex.Release();
+            queued_media = true;
+            return 7;
+        }
+
         string? cause = args == null ? " " : args.GetType().ToString();
         cause ??= "";
         WriteLog("We are current \n" + new_media + "\nCause of media update: " + cause);
@@ -548,6 +572,10 @@ class DeviceHandler
                 log_message = "Thoth has lost contact. What is this blasphemy?";
                 WriteLog(log_message, true, null, serial_tip);
                 break;
+            case IOException:
+                log_message = "IOException";
+                WriteLog(log_message);
+                break;
             default:
                 WriteLog(exception.Message);
                 break;
@@ -684,7 +712,7 @@ class DeviceHandler
                         await gsmtcs.TrySkipNextAsync();
                 }
             }
-            if (gsmtcs == null && !config.WallpaperMode)
+            if (gsmtcs == null && !config.WallpaperMode && cmd > 3)
             {
                 WriteLog("No current media session and not in wallpaper mode :(");
                 GUI.media_writer_queue.TryEnqueue(OnRequestSessionRefresh);
@@ -731,15 +759,9 @@ class DeviceHandler
         {
             serialPort.Write(bytes, 0, bytes.Length);
         }
-        catch (InvalidOperationException)
+        catch (Exception ex)
         {
-            WriteLog("Device disconnected, InvalidOp");
-            device_connected = false;
-        }
-        catch (IOException)
-        {
-            WriteLog("Device disconnected, IOEx");
-            device_connected = false;
+            SerialExceptionHandler(ex);
         }
     }
 

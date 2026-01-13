@@ -82,7 +82,6 @@ namespace Contexts
         public static bool continue_media = true;
         static Image selected_img = SystemIcons.Exclamation.ToBitmap();
         public static Thread read_thread = new(DeviceHandler.Read);
-        public static Thread config_thread = new(ConfigHandler.ConfigChangeHandler);
         public static DispatcherQueue media_writer_queue = DispatcherQueue.GetForCurrentThread();
         public static Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
         static readonly Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
@@ -315,7 +314,6 @@ namespace Contexts
         [STAThread]
         public static void Main(string[] args)
         {
-            config_thread.Start();
             Thread.Sleep(100);
             media_writer_queue = DispatcherQueueController.CreateOnDedicatedThread().DispatcherQueue;
             media_writer_queue.TryEnqueue(DeviceHandler.HandlerSetup);
