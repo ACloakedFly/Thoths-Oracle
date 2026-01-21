@@ -96,6 +96,11 @@ namespace Contexts
             Bitmap logo_icon = SystemIcons.Application.ToBitmap();
             try
             {
+                DirectoryInfo? dir = Directory.GetParent(Directory.GetCurrentDirectory());
+                if(dir != null)
+                    icon_paths = Directory.Exists(icon_paths)? icon_paths : dir.ToString() + "\\" + icon_paths;
+                    
+                path_icon = icon_paths + "huge.png";
                 logo_img = Image.FromFile(icon_paths + "small.png");
                 selected_img = Image.FromFile(icon_paths + "Selected.png");
                 exit_symbol = Image.FromFile(icon_paths + "Exit_Symbol.png");

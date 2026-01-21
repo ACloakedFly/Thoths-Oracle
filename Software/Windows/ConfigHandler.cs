@@ -202,21 +202,22 @@ LogContinuous: false
             ExceptionHandler(ex);
         }
     }
-    private static FileSystemWatcher watcher = new("\\");
+    private static FileSystemWatcher watcher = new();
     private static FileSystemWatcher wallpaper_watcher = new(wallpapers_path);
     public static void ConfigChangeHandler()
     {
-        Directory.CreateDirectory(wallpapers_path);
+        watcher.Path = Directory.GetCurrentDirectory();
+        watcher.Filter = default_path;
         watcher.NotifyFilter = NotifyFilters.LastWrite;
+        watcher.IncludeSubdirectories = false;
+        watcher.EnableRaisingEvents = true;
 
         watcher.Changed += OnChanged;
         watcher.Created += OnChanged;
         watcher.Error += OnError;
 
-        watcher.Filter = default_path;
-        watcher.IncludeSubdirectories = true;
-        watcher.EnableRaisingEvents = true;
 
+        Directory.CreateDirectory(wallpapers_path);
         wallpaper_watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         wallpaper_watcher.Changed += OnWallpapersChanged;
@@ -233,7 +234,7 @@ LogContinuous: false
     }
     private static void OnError(object sender, ErrorEventArgs e)
     {
-        DeviceHandler.WriteLog("FileSystemWatcher error " + e.ToString());
+        DeviceHandler.WriteLog("FileSystemWatcher error " + e.ToString() + e.GetException().ToString() + " From " + sender.ToString());
     }
     private static void OnWallpapersChanged(object sender, FileSystemEventArgs e)
     {

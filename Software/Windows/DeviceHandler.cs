@@ -673,9 +673,9 @@ class DeviceHandler
         }
         else if (code == ComCodes.Input)
         {
-            WriteLog("Oracle requests command " + cmd);
             if (cmd <= InputCodes.Mute && playback_device != null)
             {
+                WriteLog("Oracle requests volume " + cmd + " for device " + playback_device.FullName);
                 vol = await playback_device.GetVolumeAsync();
                 if (cmd == InputCodes.VolumeDown && vol != 0)
                 {
@@ -692,6 +692,7 @@ class DeviceHandler
             }
             else if (cmd > InputCodes.Mute)
             {
+                WriteLog("Oracle requests navigation " + cmd);
                 if (config.WallpaperMode)
                 {
                     if (cmd == InputCodes.Mute)
