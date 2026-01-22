@@ -15,6 +15,7 @@
 
     <NoWarn>$(NoWarn);NU1701</NoWarn>
     <ApplicationIcon>..\\Icons_Images\\logo.ico</ApplicationIcon>
+    <PublishDir>..\\..\\..\\Builds\\Thoths_Oracle_v0.x.x-beta_win-x64</PublishDir>
     <Copyright>© 2025 Dominique Negm</Copyright>
     <Version>1.1.0</Version>
     <FileVersion>1.6.2</FileVersion>
@@ -26,8 +27,11 @@
     <DebugSymbols>False</DebugSymbols>
     <DebugType>None</DebugType>
   </PropertyGroup>
-
   
+  <ItemGroup>
+    <None Include="..\Icons_Images\**" Link="..\..\..\..\..\..\..\Builds\Thoths_Oracle_v0.x.x-beta_win-x64\Icons_Images\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest"  />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="AudioSwitcher.AudioApi" Version="4.0.0-alpha5" />
     <PackageReference Include="AudioSwitcher.AudioApi.CoreAudio" Version="4.0.0-alpha5" />
