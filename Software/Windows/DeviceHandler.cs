@@ -282,7 +282,14 @@ class DeviceHandler
                 default_device = false;
             WriteLog("Looking for " + config.PlaybackDevice);
             coreAudioController = new();
-            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+            CoreAudioDevice defaultDevice = coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia);
+            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, defaultDevice);// GetDefaultCAD(config.PlaybackDevice));
+            if(playback_device.GetHashCode() == defaultDevice.GetHashCode() && !"Default Device".Equals(config.PlaybackDevice))
+            {
+                BalloonTip tip = new(){icon = ToolTipIcon.Warning, title = "Device: " + config.PlaybackDevice + " Not Found"};
+                WriteLog("Falling back to Default Device", true, null, tip);
+            }
+
         }
         if (playback_device != null)
             WriteLog("Found device: " + playback_device.Name);

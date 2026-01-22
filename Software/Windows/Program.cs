@@ -86,6 +86,7 @@ namespace Contexts
         public static DispatcherQueue media_writer_queue = DispatcherQueue.GetForCurrentThread();
         public static Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
         static readonly Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
+        private static bool first_config = true;
 
         private GUI()
         {
@@ -120,8 +121,7 @@ namespace Contexts
             wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Enabled", null, OnWallpaperToggle));
             default_audio_output = new ToolStripMenuItem("Default Device", null, OnSetAudioDevice);
             output.DropDownItems.Add(default_audio_output);
-            default_audio_output.Image = selected_img;
-
+            //default_audio_output.Image = selected_img;
 
             title = new("Thoth's Oracle", null)
             {
@@ -268,10 +268,15 @@ namespace Contexts
                 output.DropDownItems.Add(c.Name, null, new EventHandler(OnSetAudioDevice));
                 if (c.Name.Equals(oracle_Configuration.PlaybackDevice))
                 {
-                    output.DropDownItems[index].Image = selected_img;
                     default_audio_output.Image = null;
+                    output.DropDownItems[index].Image = selected_img;
                 }
                 index++;
+            }
+            if(first_config && "Default Device".Equals(oracle_Configuration.PlaybackDevice))
+            {
+                first_config = false;
+                default_audio_output.Image = selected_img;
             }
         }
         private void OnSetAudioDevice(object? sender, EventArgs args)

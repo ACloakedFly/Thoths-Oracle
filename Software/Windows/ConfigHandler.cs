@@ -203,6 +203,7 @@ LogContinuous: false
         }
     }
     private static FileSystemWatcher watcher = new();
+    static DateTime config_last;
     private static FileSystemWatcher wallpaper_watcher = new(wallpapers_path);
     public static void ConfigChangeHandler()
     {
@@ -225,9 +226,18 @@ LogContinuous: false
         wallpaper_watcher.Error += OnError;
 
         wallpaper_watcher.EnableRaisingEvents = true;
+
+        config_last = DateTime.Now;
     }
     private static void OnChanged(object sender, FileSystemEventArgs e)
     {
+        TimeSpan delta = DateTime.Now - config_last;
+        config_last = DateTime.Now;
+        if (delta.TotalMilliseconds < 1000)
+        {
+            DeviceHandler.WriteLog("Config already changed ");
+            return;
+        }
         DeviceHandler.WriteLog("Config changed ");
         Thread.Sleep(500);
         GUI.media_writer_queue.TryEnqueue(DeviceHandler.GeneralSetup);
