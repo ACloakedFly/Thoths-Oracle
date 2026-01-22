@@ -54,6 +54,8 @@ class DeviceHandler
         public const byte NextTrack = 6;
     }
     public static CoreAudioDevice? playback_device;
+    static CoreAudioController coreAudioController = new();
+    static bool default_device = false;
     static bool queued_media = false;
     static bool oracle_ready = true;
     private static readonly bool debug_log = true;
@@ -274,8 +276,12 @@ class DeviceHandler
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
         if (config.PlaybackDevice != null)
         {
+            if(config.PlaybackDevice.Equals("Default Device"))
+                default_device = true;
+            else
+                default_device = false;
             WriteLog("Looking for " + config.PlaybackDevice);
-            CoreAudioController coreAudioController = new();
+            coreAudioController = new();
             playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
         }
         if (playback_device != null)
@@ -675,6 +681,9 @@ class DeviceHandler
         {
             if (cmd <= InputCodes.Mute && playback_device != null)
             {
+                if(default_device && !playback_device.IsDefaultDevice)
+                    playback_device = coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia);
+                
                 WriteLog("Oracle requests volume " + cmd + " for device " + playback_device.FullName);
                 vol = await playback_device.GetVolumeAsync();
                 if (cmd == InputCodes.VolumeDown && vol != 0)
