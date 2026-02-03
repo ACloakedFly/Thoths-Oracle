@@ -50,7 +50,7 @@ char time_string[8];
 static uint32_t song_secs = 0, song_durs = 0;
 //Last current time stored to compare against new time. Used to cut down on label updates 
 static uint8_t sys_last_min = 0;
-static sys_time ui_time = {0, 0, 0, 0};
+static struct tm current_time;
 //Timer for updating song position and system time
 lv_timer_t *song_time;
 //Bool for checking if song is playing, increment song position when true. Bool for updating song metadata only when text has changed
@@ -142,10 +142,13 @@ void lvgl_ui(lv_disp_t *disp)
     lv_obj_set_style_bg_color(ld_bar, lv_color_hex(0xee00ff), LV_PART_INDICATOR);
 
     //Date and time
-    ui_time.date = 26;
-    ui_time.month = 5;
-    ui_time.year = 2025;
-    ui_time.seconds = 82000;
+    current_time.tm_mday = 26;
+    current_time.tm_mon = 5;
+    current_time.tm_year = 125;
+    current_time.tm_hour = 23;
+    current_time.tm_min = 47;
+    current_time.tm_sec = 39;
+
     ld_date = lv_label_create(scr);
     lv_obj_set_width(ld_date, 90);
     lv_label_set_text(ld_date, "26/05/2025");
@@ -238,9 +241,10 @@ static void decode_unicode(){
 
 //Timer for updating song position and date/time
 static void update_timer(lv_timer_t * timer){
-    ui_time.seconds++;
+    current_time.tm_sec++;
+    mktime(&current_time);
     //Store the system minute separately. We don't display the seconds, so let's only update the label on a minute change
-    uint8_t sys_min = (uint8_t)((ui_time.seconds/60)%60);
+    uint8_t sys_min = (uint8_t)(current_time.tm_min);
     if(dur_dirty){
         dur_dirty = false;
         memset(song_dur, 0, 11);
@@ -266,9 +270,9 @@ static void update_timer(lv_timer_t * timer){
     }
     //Update time on minute change. Might as well do the date here too. No point for more frequent updates
     if(sys_min != sys_last_min){
-        sprintf(time_string, "%.2u:%.2u", (uint8_t)(ui_time.seconds/3600), sys_min);
+        sprintf(time_string, "%.2u:%.2u", (uint8_t)(current_time.tm_hour), sys_min);
         lv_label_set_text(ld_time, time_string);
-        sprintf(date_string, "%.2u/%.2u/%.4u", ui_time.date, ui_time.month, ui_time.year);
+        sprintf(date_string, "%.2u/%.2u/%.4u", (uint8_t)current_time.tm_mday, (uint8_t)current_time.tm_mon, (uint16_t)(current_time.tm_year+1900));
         lv_label_set_text(ld_date, date_string);
     }
     sys_last_min = sys_min;
@@ -292,10 +296,12 @@ static void decode_timer(void*v){
     if(xSemaphoreTake(date_time_mutex, 0) == pdTRUE){
         if(time_dirty){
             time_dirty = false;
-            ui_time.date = system_time.date;
-            ui_time.month = system_time.month;
-            ui_time.seconds = system_time.seconds;
-            ui_time.year = system_time.year;
+            current_time.tm_mday = system_time.date;
+            current_time.tm_mon = system_time.month;
+            current_time.tm_year = system_time.year - 1900;
+            current_time.tm_sec = system_time.seconds%60;
+            current_time.tm_min = (system_time.seconds/60)%60;
+            current_time.tm_hour = system_time.seconds/3600;
         }
         xSemaphoreGive(date_time_mutex);
     }

@@ -26,6 +26,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include <stdlib.h>
 #include <stdint.h>
 #include <wchar.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
