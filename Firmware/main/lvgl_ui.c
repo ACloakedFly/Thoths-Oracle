@@ -49,7 +49,7 @@ char time_string[8];
 //Song position counter and duration local to this thread
 static uint32_t song_secs = 0, song_durs = 0;
 //Last current time stored to compare against new time. Used to cut down on label updates 
-static uint8_t sys_last_min = 0;
+static uint8_t sys_last_min = 80;
 static struct tm current_time;
 //Timer for updating song position and system time
 lv_timer_t *song_time;
@@ -242,9 +242,7 @@ static void decode_unicode(){
 //Timer for updating song position and date/time
 static void update_timer(lv_timer_t * timer){
     current_time.tm_sec++;
-    mktime(&current_time);
     //Store the system minute separately. We don't display the seconds, so let's only update the label on a minute change
-    uint8_t sys_min = (uint8_t)(current_time.tm_min);
     if(dur_dirty){
         dur_dirty = false;
         memset(song_dur, 0, 11);
@@ -269,13 +267,14 @@ static void update_timer(lv_timer_t * timer){
         lv_bar_set_value(ld_bar, song_secs, LV_ANIM_ON);
     }
     //Update time on minute change. Might as well do the date here too. No point for more frequent updates
-    if(sys_min != sys_last_min){
-        sprintf(time_string, "%.2u:%.2u", (uint8_t)(current_time.tm_hour), sys_min);
+    if(current_time.tm_sec >= 60 || sys_last_min != current_time.tm_min){
+        mktime(&current_time);
+        sprintf(time_string, "%.2u:%.2u", (uint8_t)(current_time.tm_hour), (uint8_t)current_time.tm_min);
         lv_label_set_text(ld_time, time_string);
         sprintf(date_string, "%.2u/%.2u/%.4u", (uint8_t)current_time.tm_mday, (uint8_t)current_time.tm_mon, (uint16_t)(current_time.tm_year+1900));
         lv_label_set_text(ld_date, date_string);
     }
-    sys_last_min = sys_min;
+    sys_last_min = current_time.tm_min;
 }
 //Really just copying the data, the decoding happens in update_timer
 static void decode_timer(void*v){
