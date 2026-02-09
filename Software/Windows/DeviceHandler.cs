@@ -670,71 +670,95 @@ class DeviceHandler
     public static async void DecodeRead(string oracle_message, int code, int cmd)
     {
         double vol;
-        if (code == ComCodes.Error)
+        try
         {
-            serial_error = 1;
-            WriteLog("Code: " + code + " Command: " + cmd + " Message: " + oracle_message);
-        }
-        else if (code == ComCodes.Idling || code == ComCodes.Finished)
-        {
-            WriteLog("Serial has acknowledged: '" + oracle_message + "'!");
-            oracle_ready = true;
-        }
-        else if (code == ComCodes.Status)
-        {
-            WriteLog("Serial responded: '" + oracle_message + "'");
-        }
-        else if (code == ComCodes.Input)
-        {
-            if (cmd <= InputCodes.Mute && playback_device != null)
+            if (code == ComCodes.Error)
             {
-                if(default_device && !playback_device.IsDefaultDevice)
-                    playback_device = coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia);
-                
-                WriteLog("Oracle requests volume " + cmd + " for device " + playback_device.FullName);
-                vol = await playback_device.GetVolumeAsync();
-                if (cmd == InputCodes.VolumeDown && vol != 0)
+                serial_error = 1;
+                WriteLog("Code: " + code + " Command: " + cmd + " Message: " + oracle_message);
+            }
+            else if (code == ComCodes.Idling || code == ComCodes.Finished)
+            {
+                WriteLog("Serial has acknowledged: '" + oracle_message + "'!");
+                oracle_ready = true;
+            }
+            else if (code == ComCodes.Status)
+            {
+                WriteLog("Serial responded: '" + oracle_message + "'");
+            }
+            else if (code == ComCodes.Input)
+            {
+                if (cmd <= InputCodes.Mute && playback_device != null)
                 {
-                    await playback_device.SetVolumeAsync(vol - config.VolumeSensitivity);
+                    if(default_device && !playback_device.IsDefaultDevice)
+                        playback_device = coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia);
+                    
+                    WriteLog("Oracle requests volume " + cmd + " for device " + playback_device.FullName);
+                    vol = await playback_device.GetVolumeAsync();
+                    if (cmd == InputCodes.VolumeDown && vol != 0)
+                    {
+                        await playback_device.SetVolumeAsync(vol - config.VolumeSensitivity);
+                    }
+                    else if (cmd == InputCodes.VolumeUp && vol != 100)
+                    {
+                        await playback_device.SetVolumeAsync(vol + config.VolumeSensitivity);
+                    }
+                    else if (cmd == InputCodes.Mute)
+                    {
+                        await playback_device.ToggleMuteAsync();
+                    }
                 }
-                else if (cmd == InputCodes.VolumeUp && vol != 100)
+                else if (cmd > InputCodes.Mute)
                 {
-                    await playback_device.SetVolumeAsync(vol + config.VolumeSensitivity);
+                    WriteLog("Oracle requests navigation " + cmd);
+                    if (config.WallpaperMode)
+                    {
+                        if (cmd == InputCodes.Mute)
+                            GUI.media_writer_queue.TryEnqueue(WallpaperPlayPause);
+                        else if (cmd == InputCodes.NextTrack)
+                            GUI.media_writer_queue.TryEnqueue(IncrementWallpaper);
+                        else if (cmd == InputCodes.PreviousTrack)
+                            GUI.media_writer_queue.TryEnqueue(DecrementWallpaper);
+                    }
+                    else if (!config.WallpaperMode && gsmtcs != null)
+                    {
+                        if (cmd == InputCodes.PreviousTrack)
+                            await gsmtcs.TrySkipPreviousAsync();
+                        else if (cmd == InputCodes.PlayPause)
+                            await gsmtcs.TryTogglePlayPauseAsync();
+                        else if (cmd == InputCodes.NextTrack)
+                            await gsmtcs.TrySkipNextAsync();
+                    }
                 }
-                else if (cmd == InputCodes.Mute)
+                if (gsmtcs == null && !config.WallpaperMode && cmd > 3)
                 {
-                    await playback_device.ToggleMuteAsync();
+                    WriteLog("No current media session and not in wallpaper mode :(");
+                    GUI.media_writer_queue.TryEnqueue(OnRequestSessionRefresh);
                 }
             }
-            else if (cmd > InputCodes.Mute)
-            {
-                WriteLog("Oracle requests navigation " + cmd);
-                if (config.WallpaperMode)
-                {
-                    if (cmd == InputCodes.Mute)
-                        GUI.media_writer_queue.TryEnqueue(WallpaperPlayPause);
-                    else if (cmd == InputCodes.NextTrack)
-                        GUI.media_writer_queue.TryEnqueue(IncrementWallpaper);
-                    else if (cmd == InputCodes.PreviousTrack)
-                        GUI.media_writer_queue.TryEnqueue(DecrementWallpaper);
-                }
-                else if (!config.WallpaperMode && gsmtcs != null)
-                {
-                    if (cmd == InputCodes.PreviousTrack)
-                        await gsmtcs.TrySkipPreviousAsync();
-                    else if (cmd == InputCodes.PlayPause)
-                        await gsmtcs.TryTogglePlayPauseAsync();
-                    else if (cmd == InputCodes.NextTrack)
-                        await gsmtcs.TrySkipNextAsync();
-                }
-            }
-            if (gsmtcs == null && !config.WallpaperMode && cmd > 3)
-            {
-                WriteLog("No current media session and not in wallpaper mode :(");
+        }
+        catch(Exception e)
+        {
+            Command_Exception_Handler(e);
+        }
+        
+    }
+
+    private static void Command_Exception_Handler(Exception exception)
+    {
+        switch (exception)
+        {
+            case COMException:
+                WriteLog("No current media session :(");
+                gsmtcs = null;
                 GUI.media_writer_queue.TryEnqueue(OnRequestSessionRefresh);
-            }
+                break;
+            default:
+                WriteLog(exception.Message);
+                break;
         }
     }
+
     private static void Write_Bytes(byte tag, uint length, byte[]? data, ushort width, ushort height, uint dur = 0)
     {
         if (!device_connected)

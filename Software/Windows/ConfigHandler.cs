@@ -104,8 +104,8 @@ AlbumArtist: false
 MonitoredProgram:
 - fireFOX.exe #On windows 11 use 308046B0AF4A39CB
 - musicbee.exe
-#- vlc.exe
-#- SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify
+- vlc.exe
+- SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify
 
 #Display the following text when in wallpaper mode
 WallpaperTitle: 'Wallpaper Mode'
