@@ -27,10 +27,10 @@ import queue
 from device_handler import main_setup, main_exit
 import serial.tools.list_ports
 from config_handler import save_config, load_config, notify_queue, setup_queue
+import os
+import subprocess
 
-ICONS_PATH = 'Icons_Images/'
-#ICONS_PATH = '../Icons_Images/'
-#ICONS_PATH = ''
+ICONS_PATH = 'Icons_Images/' if os.path.isdir('Icons_Images/') else '../Icons_Images/'
 global icon
 icon_image = Image.open(fp=(ICONS_PATH+"huge.png"))
 icon = pystray.Icon(name="Thoth's Oracle", icon=icon_image)
@@ -41,6 +41,7 @@ global wall_list
 global ports_action
 global vol_action
 global volume_list
+global shortcut_btn
 global exit_btn
 global title
 global notifying
@@ -55,6 +56,8 @@ def on_exit(icon, query):
     main_exit()
     icon.stop()
 
+def on_shortcut():
+    subprocess.Popen(["xdg-open", os.curdir])
 
 def notify_loop():
     while notifying:
@@ -69,7 +72,7 @@ def notify_loop():
 def on_port_select(icon, query):
     global ports_menu
     ports_menu = MenuItem(text="Port: " + str(query), action=ports_action)
-    update_menu(title, refresh_oracle, volume_list, ports_menu, wall_list, exit_btn)
+    update_menu()
     or_c = load_config()
     or_c['ComPort'] = str(query)
     save_config(config=or_c)
@@ -80,7 +83,7 @@ def on_vol_sens_select(icon, query):
     oracle['VolumeSensitivity'] = int(str(query))
     volume_list = MenuItem(text="Volume Sensitivity: " + str(oracle['VolumeSensitivity']), action=vol_action)
     save_config(oracle)
-    update_menu(title, refresh_oracle, volume_list, ports_menu, wall_list, exit_btn)
+    update_menu()
 
 def refresh_vol_sens():
     global vol_action
@@ -92,7 +95,7 @@ def refresh_vol_sens():
 
     vol_action = Menu(*tuple(vol_list))
     volume_list = MenuItem(text="Volume Sensitivity: " + str(oracle['VolumeSensitivity']), action=vol_action)
-    update_menu(title, refresh_oracle, volume_list, ports_menu, wall_list, exit_btn)
+    update_menu()
 
 def on_wallpaper_select():
     oracle = load_config()
@@ -103,13 +106,13 @@ def on_wallpaper_select():
     else:
         oracle["WallpaperMode"] = True
         wall_list = MenuItem(text="Wallpaper Mode: Enabled", action=on_wallpaper_select)
-    update_menu(title, refresh_oracle, volume_list, ports_menu, wall_list, exit_btn)
+    update_menu()
     save_config(oracle)
     pass
 
-def update_menu(title_list, refresh_list, vol_list, ports_list, wall, exit_list):
+def update_menu():
     global icon
-    icon_menu = (title_list, refresh_list, vol_list, ports_list, wall, exit_list)
+    icon_menu = (title, refresh_oracle, volume_list, ports_menu, wall_list, shortcut_btn, exit_btn)
     icon.menu = icon_menu
     icon.update_menu()
 
@@ -125,7 +128,7 @@ def refresh_ports():
 
     ports_action = Menu(*tuple(ports_list))
     ports_menu = MenuItem(text="Port: " + oracle['ComPort'], action=ports_action)
-    update_menu(title, refresh_oracle, volume_list, ports_menu, wall_list, exit_btn)
+    update_menu()
 
 def reset_oracle():
     setup_queue.put("Refresh")
@@ -140,11 +143,13 @@ def ui_setup():
     global title
     global notify_thread
     global refresh_oracle
+    global shortcut_btn
 
 
     oracle = load_config()
     title = MenuItem("Thoth's Oracle", action=None)
     exit_btn = MenuItem("Exit", action=on_exit)
+    shortcut_btn = MenuItem("Open Settings Folder", action=on_shortcut)
     wall_list = MenuItem(text="Wallpaper Mode: " + str(oracle['WallpaperMode']), action=on_wallpaper_select)
     volume_list = MenuItem(text="Volume", action=None)
     refresh_oracle = MenuItem(text="Refresh", action=reset_oracle)

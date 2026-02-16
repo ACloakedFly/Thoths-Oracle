@@ -162,7 +162,7 @@ def uri_selection():
     global media_handler
     uri_list = get_players_uri()
     uri_string = '\n'.join(uri_list)
-    logging(uri_string, mode='w', file_name=URI_FILE, time_stamp=False)
+    logging(uri_string, mode='a', file_name=URI_FILE, time_stamp=False)
     uri_ordered = []
     for program in oracle_config['MonitoredProgram']:
         matched_uri = re.findall(".*MediaPlayer2.*" + program + ".*", uri_string, flags=re.IGNORECASE)
@@ -182,11 +182,16 @@ def uri_selection():
             media_handler = bus.add_signal_receiver(handler_function=player_handler, bus_name=str(uri), dbus_interface='org.freedesktop.DBus.Properties')
             logging("Connected to " + str(uri) + " playing? " + str(player.PlaybackStatus))
             if player.PlaybackStatus == "Stopped":
-                status_signal = bus.add_signal_receiver(handler_function=status_changed, bus_name=str(uri), path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties') 
+                status_signal.remove()
+                status_signal = bus.add_signal_receiver(handler_function=status_changed, bus_name=str(uri), path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties', sender_keyword="sender", destination_keyword="destination", interface_keyword="interface", member_keyword="member", path_keyword="path", message_keyword="msg") 
+            return True
+        
         except Exception as e:
             logging("If AppArmor issue, please resolve, then restart app\n" + str(e), notify=True)
+            return False
     else:
-        logging("No player monitored", notify=True)
+        logging("No player monitored", notify=False)
+        return False
 
 def serial_setup():
     global oracle_ready
@@ -220,13 +225,14 @@ def general_setup():
         global wallpaper_mode
         global wallpaper_period
         status_update = False
+        updated = False
         try:
             time.sleep(0.5)
             setup_instance = config_handler.setup_queue.get(block=True)
-            if exitting:
-                return
+            if exitting or str(setup_instance) == "Exit":
+                continue
             logging("Setup changed from " + setup_instance)
-            if str(setup_instance) == "Status changed":
+            if str(setup_instance) == "Status changed" or str(setup_instance) == "Refresh":
                 logging("status from setup")
                 status_update = True
             old_config = None
@@ -236,20 +242,22 @@ def general_setup():
             if status_update is False:
                 if old_config != None:
                     if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
-                        uri_selection()
+                        updated = uri_selection()
                     if old_config['ComPort'] != oracle_config['ComPort']:
-                        serial_setup()
+                        updated = serial_setup()
                 else:
-                    uri_selection()
+                    updated = uri_selection()
                     serial_setup()
             else:
-                uri_selection()
+                updated = uri_selection()
             wallpaper_mode = oracle_config['WallpaperMode']
             wallpaper_period = oracle_config['WallpaperPeriod']*60
             if wallpaper_mode:
                 wallpaper_handler()
                 next_wallpaper()
             else:
+                if not updated:
+                    continue
                 try:
                     values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
                     if meta_queue.qsize() < 38 and oracle_config['WallpaperMode'] is False:
@@ -378,14 +386,17 @@ def media_check():
         time.sleep(0.5)
 
 def player_handler(*args, **kw):
+    global queued_media
     try:
-        if meta_queue.qsize() < 38 and oracle_config['WallpaperMode'] is False:
+        if meta_queue.qsize() < 5 and oracle_config['WallpaperMode'] is False:
             #logging("Player handler: " + str(args))
             meta_queue.put(args, block=False)
         else:
-            logging("Queue full")
+            queued_media = True
+            #logging("Queue full")
     except Exception as e: 
-        logging("player_handler:" + str(e))
+        queued_media = True
+        #logging("player_handler:" + str(e))
 
 def wallpaper_handler():
     global images
@@ -465,11 +476,17 @@ def serial_write_bytes():
             pass
 
 def session_changed(*args, **kwargs):
-    logging("Session changed " + str(args))
-    config_handler.setup_queue.put("Session changed")
+    sender = str(args[0])
+    if "MediaPlayer2" in sender:
+        for program in oracle_config['MonitoredProgram']:
+            name = re.search(program, sender, flags=re.IGNORECASE)
+            if name:
+                logging("Session changed to " + str(sender))
+                config_handler.setup_queue.put("Session changed")
     
 def status_changed(*args, **kwargs):
     status_signal.remove()
+    logging("Status changed " + str(args) + "\n " + str(kwargs))
     config_handler.setup_queue.put("Status changed")
 
 def seeked(*args, **kwargs):
@@ -489,9 +506,11 @@ def main_setup():
     global seeked_signal
     global media_check_thread
     global media_handler
+    global status_signal
     exitting = False
     read_thread = threading.Thread(target=serial_reader, name="SerialRead")
     logging("Start log", mode='w')
+    logging("", mode='w', file_name=URI_FILE, time_stamp=False)
     meta_queue = queue.Queue(maxsize=40)
     DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
@@ -501,10 +520,9 @@ def main_setup():
     seeked_signal = bus.add_signal_receiver(handler_function=seeked, signal_name='Seeked', dbus_interface='org.mpris.MediaPlayer2.Player') 
     media_handler = bus.add_signal_receiver(handler_function=player_handler)
     media_handler.remove()
-
-    sys_bus = dbus.SystemBus()
-    sys_bus.add_signal_receiver(handler_function=session_changed, dbus_interface='org.freedesktop.DBus')
-    
+    status_signal = bus.add_signal_receiver(handler_function=status_changed)
+    status_signal.remove()
+    bus.add_signal_receiver(handler_function=session_changed, dbus_interface='org.freedesktop.DBus')
 
     setup_thread = threading.Thread(target=general_setup)
     setup_thread.start()
