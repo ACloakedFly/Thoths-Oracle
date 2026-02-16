@@ -22,9 +22,9 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 import threading
 import serial
 from dbus.mainloop.glib import DBusGMainLoop
+import dbus
 from mpris2 import get_players_uri
 from mpris2 import Player
-from gi.repository import GLib
 import queue
 import time
 import datetime
@@ -34,10 +34,8 @@ from config_handler import config_watcher, load_config, logging, URI_FILE, WALLP
 import config_handler
 import re
 import os
-#from ui_handler import ui_setup, icon
 
 global player
-#global meta_queue
 global oracle_ready
 oracle_ready = True
 global oracle_serial
@@ -69,23 +67,34 @@ wallpaper_mode = False
 wallpaper_num = 0
 global meta_thread
 global meta_queue
+global queued_media
+queued_media = False
 global writer_queue
 global writer_thread
 global setup_thread
 global exitting
+global status_signal
+global seeked_signal
+global bus
+global media_check_thread
+global media_handler
 
 def serial_decode(code, cmd):
     global wallpaper_paused
-    if code == 7 or code == 8:
+    global queued_media
+    if code == 9:
+        queued_media = True
+    elif code == 7 or code == 8:
         #print("Oracle Ready")
         global oracle_ready
         oracle_ready = True
-    if code == 5:
+    elif code == 5:
         #print("Serial read config: ", oracle_config)
         vol_sens = 3 if oracle_config['VolumeSensitivity'] is None else oracle_config['VolumeSensitivity']
         try:
             if cmd == 1:
                 player.Volume -= vol_sens/100
+                logging(str(player.Volume))
             elif cmd == 2:
                 player.Volume += vol_sens/100
             elif cmd == 3:
@@ -114,7 +123,7 @@ def serial_decode(code, cmd):
                 else:
                     player.Next()
         except Exception as e:
-            logging(str(e))
+            logging("serial_decode: " + str(e))
 
 def serial_reader():
     message = ""
@@ -127,7 +136,7 @@ def serial_reader():
         except FileNotFoundError as e:
             logging("File not found")
         except Exception as e:
-            logging(str(e))
+            logging("serial_reader: " + str(e))
         next_int = int.from_bytes(next_byte)
         if next_int == 0:
             continue
@@ -149,6 +158,8 @@ def serial_reader():
 
 def uri_selection():
     global player
+    global status_signal
+    global media_handler
     uri_list = get_players_uri()
     uri_string = '\n'.join(uri_list)
     logging(uri_string, mode='w', file_name=URI_FILE, time_stamp=False)
@@ -166,7 +177,12 @@ def uri_selection():
     if uri != "":
         try:
             player = Player(dbus_interface_info={'dbus_uri': uri})
-            player.PropertiesChanged = player_handler
+            if media_handler is not None:
+                media_handler.remove()
+            media_handler = bus.add_signal_receiver(handler_function=player_handler, bus_name=str(uri), dbus_interface='org.freedesktop.DBus.Properties')
+            logging("Connected to " + str(uri) + " playing? " + str(player.PlaybackStatus))
+            if player.PlaybackStatus == "Stopped":
+                status_signal = bus.add_signal_receiver(handler_function=status_changed, bus_name=str(uri), path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties') 
         except Exception as e:
             logging("If AppArmor issue, please resolve, then restart app\n" + str(e), notify=True)
     else:
@@ -191,6 +207,7 @@ def serial_setup():
             read_thread.start()
         else:
             serial_reading = False
+        logging("Connected to device")
     except serial.SerialException as e:
         oracle_serial = None
         serial_reading = False
@@ -202,24 +219,31 @@ def general_setup():
         global oracle_config
         global wallpaper_mode
         global wallpaper_period
+        status_update = False
         try:
-            #logging("Getting task")
             time.sleep(0.5)
-            config_handler.setup_queue.get(block=True)#, timeout=1)
+            setup_instance = config_handler.setup_queue.get(block=True)
             if exitting:
                 return
+            logging("Setup changed from " + setup_instance)
+            if str(setup_instance) == "Status changed":
+                logging("status from setup")
+                status_update = True
             old_config = None
             if 'oracle_config' in locals():
                 old_config = oracle_config
             oracle_config = load_config()
-            if old_config != None:
-                if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
+            if status_update is False:
+                if old_config != None:
+                    if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
+                        uri_selection()
+                    if old_config['ComPort'] != oracle_config['ComPort']:
+                        serial_setup()
+                else:
                     uri_selection()
-                if old_config['ComPort'] != oracle_config['ComPort']:
                     serial_setup()
             else:
                 uri_selection()
-                serial_setup()
             wallpaper_mode = oracle_config['WallpaperMode']
             wallpaper_period = oracle_config['WallpaperPeriod']*60
             if wallpaper_mode:
@@ -228,17 +252,18 @@ def general_setup():
             else:
                 try:
                     values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
-                    #data_handler(values)
                     if meta_queue.qsize() < 38 and oracle_config['WallpaperMode'] is False:
                         meta_queue.put((values, 0), block=False)
+                    
+                    logging("Starting media check timer")
                 except Exception as e:
-                    logging(str(e))
+                    logging("general_setup initial_values: " + str(e))
             config_handler.setup_queue.task_done()
         except queue.Empty as e:
             pass
             #logging("No tasks")
         except Exception as e:
-            logging(str(e))
+            logging("general_setup general: " + str(e))
 
 def convert_to_565(bytes):
     byte_count = len(bytes)
@@ -258,43 +283,45 @@ def data_handler(*args):
         position = int(player.Position/1000000)
     except Exception as e:
         logging("Position unavailable")
-
     if "Metadata" in properties:
-        #Date and time
-        current_time = datetime.datetime.now()
-        day_month = int(current_time.day + (current_time.month << 8))
-        current_seconds = int((current_time-datetime.datetime(current_time.year, current_time.month, current_time.day)).total_seconds())
-        writer_queue.put(dict(tag=3, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
-        #Position and duration
-        pos_dur = bytearray()
-        duration = int((properties['Metadata']['mpris:length'])/1000000)
-        pos_dur.extend(position.to_bytes(4, 'little'))
-        pos_dur.extend(duration.to_bytes(4, 'little'))
-        playing = 0
-        if "PlaybackStatus" in properties:
-            if properties['PlaybackStatus'] == "Playing":
-                playing = 1
-        writer_queue.put(dict(tag=4, length=len(pos_dur), data=pos_dur, width=playing, height=1))
-        #Text data
-        artists = ", ".join([str(ele) for ele in properties['Metadata']['xesam:albumArtist']]) if oracle_config['AlbumArtist'] else ", ".join([str(ele) for ele in properties['Metadata']['xesam:artist']])
-        meta_text = properties['Metadata']['xesam:title'] + "\n" + artists + "\n" + properties['Metadata']['xesam:album'] + "\n"
-        meta_bytes = bytearray(meta_text, encoding='utf8')
-        writer_queue.put(dict(tag=2, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
-        #Image data
-        if "mpris:artUrl" in properties['Metadata']:
-            thumb = properties['Metadata']['mpris:artUrl']
-            with Image(filename=thumb) as img:
-                img.transform(resize='304x304')
-                img.background_color = Color('black')
-                img.extent(304, 304, gravity='center')
-                img.save(filename='thumby.png')
-                pixels = img.export_pixels(channel_map="RGB")
-                rgb565 = convert_to_565(pixels)
-                writer_queue.put(dict(tag=1, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
-
+        try:
+            #Date and time
+            current_time = datetime.datetime.now()
+            day_month = int(current_time.day + (current_time.month << 8))
+            current_seconds = int((current_time-datetime.datetime(current_time.year, current_time.month, current_time.day)).total_seconds())
+            writer_queue.put(dict(tag=3, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
+            #Position and duration
+            pos_dur = bytearray()
+            duration = int((properties['Metadata']['mpris:length'])/1000000)
+            pos_dur.extend(position.to_bytes(4, 'little'))
+            pos_dur.extend(duration.to_bytes(4, 'little'))
+            playing = 0
+            if "PlaybackStatus" in properties:
+                if properties['PlaybackStatus'] == "Playing":
+                    #logging("Playback status: " + properties['PlaybackStatus'])
+                    playing = 1
+            writer_queue.put(dict(tag=4, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+            #Text data
+            artists = ", ".join([str(ele) for ele in properties['Metadata']['xesam:albumArtist']]) if oracle_config['AlbumArtist'] else ", ".join([str(ele) for ele in properties['Metadata']['xesam:artist']])
+            meta_text = properties['Metadata']['xesam:title'] + "\n" + artists + "\n" + properties['Metadata']['xesam:album'] + "\n"
+            meta_bytes = bytearray(meta_text, encoding='utf8')
+            writer_queue.put(dict(tag=2, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
+            #Image data
+            if "mpris:artUrl" in properties['Metadata']:
+                thumb = properties['Metadata']['mpris:artUrl']
+                with Image(filename=thumb) as img:
+                    img.transform(resize='304x304')
+                    img.background_color = Color('black')
+                    img.extent(304, 304, gravity='center')
+                    img.save(filename='thumby.png')
+                    pixels = img.export_pixels(channel_map="RGB")
+                    rgb565 = convert_to_565(pixels)
+                    writer_queue.put(dict(tag=1, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
+        except KeyError:
+            pass
     #Playback changed
-    elif "PlaybackStatus" in properties:
-        logging("Playback status: " + properties['PlaybackStatus'])
+    if "PlaybackStatus" in properties:
+        #logging("Playback status: " + properties['PlaybackStatus'])
         playing = 0
         if properties['PlaybackStatus'] == "Playing":
             playing = 1
@@ -302,31 +329,63 @@ def data_handler(*args):
         pos_dur.extend(position.to_bytes(4, 'little'))
         pos_dur.extend(duration.to_bytes(4, 'little'))
         writer_queue.put(dict(tag=4, length=len(pos_dur), data=pos_dur, width=playing, height=0))
+    
 
 def queue_handler():
+    global queued_media
     while meta_reading:
         try:
-            properties = meta_queue.get()[0]
+            #properties = meta_queue.get()[0]
+            properties = meta_queue.get()
             if exitting:
                 return
             if meta_queue.qsize() >= 5:
                 #logging(" ending prematurely ")
+                queued_media = True
                 meta_queue.task_done()
-            else:
+            elif len(properties) == 1:
                 #logging("Sending properties: " + str(properties))
                 data_handler(properties)
                 meta_queue.task_done()
+            elif len(properties) >= 2:
+                if type(properties[1]) is dbus.Dictionary:
+                    #logging("Sending properties" + str(properties[1]))
+                    data_handler(properties[1])
+                else:
+                    data_handler(properties[0])
+            else:
+                #logging("Not right " + str(len(properties)) + " \n" + str(properties))
+                pass
         except queue.Empty:
+            logging("Queue empty")
+            queued_media = True
             pass
 
 
-def player_handler(self, *args, **kw):
+def media_check():
+    global queued_media
+    while not exitting:
+        try:
+            if queued_media:
+                queued_media = False
+                values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
+                meta_queue.put((values, 0), block=False)
+                #logging("putting properties: " + str(values))
+        except queue.Full:
+            pass
+        except dbus.exceptions.DBusException:
+            pass
+        time.sleep(0.5)
+
+def player_handler(*args, **kw):
     try:
-        #print("Total tasks from player ", meta_queue.qsize(), " song ", player.Metadata['xesam:title'])
         if meta_queue.qsize() < 38 and oracle_config['WallpaperMode'] is False:
+            #logging("Player handler: " + str(args))
             meta_queue.put(args, block=False)
+        else:
+            logging("Queue full")
     except Exception as e: 
-        logging(str(e))
+        logging("player_handler:" + str(e))
 
 def wallpaper_handler():
     global images
@@ -405,6 +464,18 @@ def serial_write_bytes():
         except queue.Empty:
             pass
 
+def session_changed(*args, **kwargs):
+    logging("Session changed " + str(args))
+    config_handler.setup_queue.put("Session changed")
+    
+def status_changed(*args, **kwargs):
+    status_signal.remove()
+    config_handler.setup_queue.put("Status changed")
+
+def seeked(*args, **kwargs):
+    global queued_media
+    queued_media = True
+
 def main_setup():
     global read_thread
     global meta_thread
@@ -414,11 +485,27 @@ def main_setup():
     global setup_thread
     global wallpaper_timer
     global exitting
+    global bus
+    global seeked_signal
+    global media_check_thread
+    global media_handler
     exitting = False
     read_thread = threading.Thread(target=serial_reader, name="SerialRead")
     logging("Start log", mode='w')
     meta_queue = queue.Queue(maxsize=40)
     DBusGMainLoop(set_as_default=True)
+    bus = dbus.SessionBus()
+    #status_signal = bus.add_signal_receiver(handler_function=status_changed, bus_name='org.mpris.MediaPlayer2.io.bassi.Amberol', path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties', sender_keyword="sender", destination_keyword="destination", interface_keyword="interface", member_keyword="member", path_keyword="path", message_keyword="msg")
+    #bus.add_signal_receiver(handler_function=status_changed, path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties')
+    #status_signal.remove()
+    seeked_signal = bus.add_signal_receiver(handler_function=seeked, signal_name='Seeked', dbus_interface='org.mpris.MediaPlayer2.Player') 
+    media_handler = bus.add_signal_receiver(handler_function=player_handler)
+    media_handler.remove()
+
+    sys_bus = dbus.SystemBus()
+    sys_bus.add_signal_receiver(handler_function=session_changed, dbus_interface='org.freedesktop.DBus')
+    
+
     setup_thread = threading.Thread(target=general_setup)
     setup_thread.start()
 
@@ -430,10 +517,11 @@ def main_setup():
     writer_queue = queue.Queue(maxsize=1)
     writer_thread.start()
 
+    media_check_thread = threading.Thread(target=media_check, name="MediaCheckThread")
+    media_check_thread.start()
+
     wallpaper_timer = threading.Timer(interval=wallpaper_period, function=next_wallpaper)
     config_watcher()
-    #main_loop = GLib.MainLoop()
-    #main_loop.run()
 
 #main_setup()
 def main_exit():
@@ -459,7 +547,8 @@ def main_exit():
     #writer_queue.join()
     #config_handler.setup_queue.join()
     logging("Joined queues")
-
+    media_check_thread.join()
+    logging("Joined media_check")
     read_thread.join()
     logging("Joined read")
     setup_thread.join()
