@@ -34,6 +34,7 @@ from config_handler import config_watcher, load_config, logging, URI_FILE, WALLP
 import config_handler
 import re
 import os
+from colour import Color
 
 global player
 global oracle_ready
@@ -41,6 +42,7 @@ oracle_ready = True
 global oracle_serial
 oracle_serial = None
 global oracle_config
+global old_config
 global read_thread
 global serial_reading
 serial_reading = False
@@ -210,6 +212,7 @@ def serial_setup():
             serial_reading = True
             read_thread = threading.Thread(target=serial_reader, name="SerialRead")
             read_thread.start()
+            update_date_time()
         else:
             serial_reading = False
         logging("Connected to device")
@@ -222,6 +225,7 @@ def serial_setup():
 def general_setup():
     while setting_up:
         global oracle_config
+        global old_config
         global wallpaper_mode
         global wallpaper_period
         status_update = False
@@ -235,21 +239,26 @@ def general_setup():
             if str(setup_instance) == "Status changed" or str(setup_instance) == "Refresh":
                 logging("status from setup")
                 status_update = True
-            old_config = None
-            if 'oracle_config' in locals():
-                old_config = oracle_config
+            #old_config = None
+            #if 'oracle_config' in locals():
+            #    old_config = oracle_config
             oracle_config = load_config()
-            if status_update is False:
-                if old_config != None:
-                    if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
-                        updated = uri_selection()
-                    if old_config['ComPort'] != oracle_config['ComPort']:
-                        updated = serial_setup()
-                else:
+            #if status_update is False:
+            if old_config != None:
+                logging("Old colour: " + str(old_config['Colour']) + "\nNew colour: " + str(oracle_config['Colour']))
+                if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
                     updated = uri_selection()
+                if old_config['ComPort'] != oracle_config['ComPort']:
                     serial_setup()
+                if old_config['Colour'] != oracle_config['Colour']:
+                    update_colour()
             else:
                 updated = uri_selection()
+                serial_setup()
+                update_colour()
+            old_config = oracle_config
+            #else:
+            #    updated = uri_selection()
             wallpaper_mode = oracle_config['WallpaperMode']
             wallpaper_period = oracle_config['WallpaperPeriod']*60
             if wallpaper_mode:
@@ -283,6 +292,23 @@ def convert_to_565(bytes):
         rgb565.extend(gb.to_bytes(1, 'little'))
     return rgb565
 
+def update_colour():
+    hex_c = "#%0.6X" % oracle_config['Colour']
+    c = Color(str(hex_c))
+    cd = Color(c)
+    cd.set_luminance((cd.get_luminance() - 0.2) % 1)
+    ci = int(c.get_hex_l().removeprefix("#"), 16)
+    cdi = int(cd.get_hex_l().removeprefix("#"), 16)
+    logging("Progress bar colour: " + str(c.get_hex_l()) + " date/time line colour: " + str(cd.get_hex_l()))
+    writer_queue.put(dict(tag=10, length=cdi, data=None, width=0, height=0, dur=ci))
+
+def update_date_time():
+    #Date and time
+    current_time = datetime.datetime.now()
+    day_month = int(current_time.day + (current_time.month << 8))
+    current_seconds = int((current_time-datetime.datetime(current_time.year, current_time.month, current_time.day)).total_seconds())
+    writer_queue.put(dict(tag=3, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
+
 def data_handler(*args):
     global duration
     properties = args[0]
@@ -293,11 +319,7 @@ def data_handler(*args):
         logging("Position unavailable")
     if "Metadata" in properties:
         try:
-            #Date and time
-            current_time = datetime.datetime.now()
-            day_month = int(current_time.day + (current_time.month << 8))
-            current_seconds = int((current_time-datetime.datetime(current_time.year, current_time.month, current_time.day)).total_seconds())
-            writer_queue.put(dict(tag=3, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
+            update_date_time()
             #Position and duration
             pos_dur = bytearray()
             duration = int((properties['Metadata']['mpris:length'])/1000000)
@@ -376,8 +398,9 @@ def media_check():
         try:
             if queued_media:
                 queued_media = False
-                values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
-                meta_queue.put((values, 0), block=False)
+                if player is not None:
+                    values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
+                    meta_queue.put((values, 0), block=False)
                 #logging("putting properties: " + str(values))
         except queue.Full:
             pass
@@ -507,6 +530,8 @@ def main_setup():
     global media_check_thread
     global media_handler
     global status_signal
+    global old_config
+    global player
     exitting = False
     read_thread = threading.Thread(target=serial_reader, name="SerialRead")
     logging("Start log", mode='w')
@@ -524,6 +549,8 @@ def main_setup():
     status_signal.remove()
     bus.add_signal_receiver(handler_function=session_changed, dbus_interface='org.freedesktop.DBus')
 
+    old_config = None
+    player = None
     setup_thread = threading.Thread(target=general_setup)
     setup_thread.start()
 

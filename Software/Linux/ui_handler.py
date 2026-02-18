@@ -42,6 +42,7 @@ global ports_action
 global vol_action
 global volume_list
 global shortcut_btn
+global colour_btn
 global exit_btn
 global title
 global notifying
@@ -85,6 +86,11 @@ def on_vol_sens_select(icon, query):
     save_config(oracle)
     update_menu()
 
+def on_colour_select():
+    oracle = load_config()
+    oracle['Colour'] = 0xffff00
+    save_config(oracle)
+
 def refresh_vol_sens():
     global vol_action
     global volume_list
@@ -112,7 +118,7 @@ def on_wallpaper_select():
 
 def update_menu():
     global icon
-    icon_menu = (title, refresh_oracle, volume_list, ports_menu, wall_list, shortcut_btn, exit_btn)
+    icon_menu = (title, refresh_oracle, volume_list, ports_menu, wall_list, shortcut_btn, colour_btn, exit_btn)
     icon.menu = icon_menu
     icon.update_menu()
 
@@ -140,6 +146,7 @@ def ui_setup():
     global wall_list
     global volume_list
     global exit_btn
+    global colour_btn
     global title
     global notify_thread
     global refresh_oracle
@@ -150,6 +157,7 @@ def ui_setup():
     title = MenuItem("Thoth's Oracle", action=None)
     exit_btn = MenuItem("Exit", action=on_exit)
     shortcut_btn = MenuItem("Open Settings Folder", action=on_shortcut)
+    colour_btn = MenuItem("Change Colour", action=on_colour_select)
     wall_list = MenuItem(text="Wallpaper Mode: " + str(oracle['WallpaperMode']), action=on_wallpaper_select)
     volume_list = MenuItem(text="Volume", action=None)
     refresh_oracle = MenuItem(text="Refresh", action=reset_oracle)

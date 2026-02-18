@@ -53,10 +53,13 @@ static uint8_t sys_last_min = 80;
 static struct tm current_time;
 //Timer for updating song position and system time
 lv_timer_t *song_time;
+lv_color32_t bar_colour;
+lv_color32_t line_colour;
 //Bool for checking if song is playing, increment song position when true. Bool for updating song metadata only when text has changed
 static bool song_play = false;
 static bool pos_dirty = false;
 static bool dur_dirty = false;
+static bool style_colour_dirty = false;
 //LVGL points for setting position of bar at the top of the screen
 lv_point_t points[] = {{12,26}, {308,26}};
 
@@ -274,6 +277,12 @@ static void update_timer(lv_timer_t * timer){
         sprintf(date_string, "%.2u/%.2u/%.4u", (uint8_t)current_time.tm_mday, (uint8_t)current_time.tm_mon, (uint16_t)(current_time.tm_year+1900));
         lv_label_set_text(ld_date, date_string);
     }
+    if(style_colour_dirty){
+        style_colour_dirty = false;
+        lv_style_set_line_color(&style, lv_color_hex(line_colour.full));
+        lv_obj_set_style_bg_color(ld_bar, lv_color_hex(bar_colour.full), LV_PART_INDICATOR);
+        lv_obj_add_style(ll_line, &style, 0);
+    }
     sys_last_min = current_time.tm_min;
 }
 //Really just copying the data, the decoding happens in update_timer
@@ -301,6 +310,12 @@ static void decode_timer(void*v){
             current_time.tm_sec = system_time.seconds%60;
             current_time.tm_min = (system_time.seconds/60)%60;
             current_time.tm_hour = system_time.seconds/3600;
+        }
+        if(theme_dirty){
+            theme_dirty = false;
+            style_colour_dirty = true;
+            bar_colour = system_bar_colour;
+            line_colour = system_line_colour;
         }
         xSemaphoreGive(date_time_mutex);
     }

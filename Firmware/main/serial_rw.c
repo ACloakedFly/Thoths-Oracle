@@ -41,7 +41,7 @@ uint32_t img_counter = 0;
 uint32_t song_duration = 1;
 uint32_t song_position = 0;
 uint8_t song_pos_bytes[DUR_POS_BYTES];
-bool name_dirty = false, position_dirty = false, time_dirty = false, img_dirty = false;
+bool name_dirty = false, position_dirty = false, time_dirty = false, img_dirty = false, theme_dirty = false;
 bool song_playing = false;
 SemaphoreHandle_t info_mutex = NULL;
 SemaphoreHandle_t img_mutex = NULL;
@@ -63,6 +63,8 @@ frame_header header = {0, 0, 0, 0, 0};
 static const frame_header empty_header = {0, 0, 0, 0, 0};
 
 sys_time system_time = {0, 0, 0, 0};
+lv_color32_t system_bar_colour;
+lv_color32_t system_line_colour;
 
 //Setup the serial communication. Should be USB OTG. It will communicate as fast as it can up to how fast the host communicates and <= USB full speed I think 
 static int serial_setup(){
@@ -146,11 +148,15 @@ static void error_reset(uint8_t erre){
 
 //Check header for common errors, like nonsense tag or too much data. Reset if anything is wrong and return error code. Return 1 if everything is alright
 static uint8_t error_check(void){
-    if(header.tag > DUR_POS_TAG || header.tag == 0){
+    if(header.tag > COLOUR_TAG || header.tag == 0){
         error_reset(2);
         return 2;
     }
-    else if (header.length > IMG_SIZE){
+    else if (header.tag > DUR_POS_TAG && header.tag < COLOUR_TAG){
+        error_reset(2);
+        return 2;
+    }
+    else if (header.tag == IMG_TAG && header.length > IMG_SIZE){
         error_reset(3);
         return 3;
     }
@@ -262,6 +268,23 @@ static void process_dur_pos(void){
         frame_end("dur_pos");
 }
 
+static void process_new_theme(void){
+    if(xSemaphoreTake(date_time_mutex, portTICK_PERIOD_MS*20) == pdTRUE){
+        theme_dirty = true;
+        char msg[40];
+        system_bar_colour.ch.blue = header.duration & 0xFF;
+        system_bar_colour.ch.green = (header.duration & 0xFF00) >> 8;
+        system_bar_colour.ch.red = (header.duration & 0xFF0000) >> 16;
+        system_line_colour.ch.blue = header.length & 0xFF;
+        system_line_colour.ch.green = (header.length & 0xFF00) >> 8;
+        system_line_colour.ch.red = (header.length & 0xFF0000) >> 16;
+        sprintf(msg, "Received colour: 0x%.2x%.2x%.2x", system_bar_colour.ch.red, system_bar_colour.ch.green, system_bar_colour.ch.blue);
+        serial_jtag_write(INFO_TAG, msg, 30, portDelay);
+        xSemaphoreGive(date_time_mutex);
+    }
+    frame_end("new theme");
+}
+
 //Serial writer helper
 //Append provided string of length length to msg_type, then a new line to the end, wait ticks for TX buffer to be available
 void serial_jtag_write(uint8_t msg_type, char *msg, uint16_t length, TickType_t ticks){
@@ -298,7 +321,7 @@ void serial_task(void *pvParameters){
             }
         }//We now have frame metadata
         error_check();
-        if(header.tag == IMG_TAG){
+        /*if(header.tag == IMG_TAG){
             process_image();
         }
         else if (header.tag == TEXT_TAG){
@@ -309,6 +332,24 @@ void serial_task(void *pvParameters){
         }
         else if (header.tag == DUR_POS_TAG){
             process_dur_pos();
+        }*/
+        switch (header.tag)
+        {
+        case IMG_TAG:
+            process_image();
+            break;
+        case TEXT_TAG:
+            process_text();
+            break;
+        case SYS_MSG_TAG:
+            process_sys_msg();
+            break;
+        case DUR_POS_TAG:
+            process_dur_pos();
+            break;
+        case COLOUR_TAG:
+            process_new_theme();
+            break;
         }
     }
 }
