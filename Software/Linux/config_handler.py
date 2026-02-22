@@ -35,6 +35,7 @@ WALLPAPER_FOLDER = 'wallpapers/'
 LOG_PATH = 'logs/'
 LOG_FILE = 'logs.txt'
 URI_FILE = 'session_IDs.txt'
+MAX_LOG_SIZE = 209715200
 #global setup_queue
 setup_queue = queue.Queue(maxsize=1)
 notify_queue = queue.Queue(maxsize=1)
@@ -110,6 +111,8 @@ def logging(log_msg, line_end='\n', mode='a', log_path = LOG_PATH, file_name = L
     if print_to_console:
         print(time_stamp_msg)
     try:
+        if os.stat(log_path + file_name).st_size >= MAX_LOG_SIZE:
+            mode = 'w'
         with open(log_path + file_name, mode) as file:
             file.write(time_stamp_msg + line_end)
     except FileNotFoundError:

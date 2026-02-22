@@ -29,7 +29,7 @@ import queue
 import time
 import datetime
 from wand.image import Image
-from wand.color import Color
+from wand.color import Color as wand_color
 from config_handler import config_watcher, load_config, logging, URI_FILE, WALLPAPER_FOLDER
 import config_handler
 import re
@@ -135,10 +135,10 @@ def serial_reader():
         next_byte = b"\x00"
         try:
             next_byte = oracle_serial.read()
-        except FileNotFoundError as e:
-            logging("File not found")
         except Exception as e:
             logging("serial_reader: " + str(e))
+            config_handler.setup_queue.put("serial_reader")
+            return -1
         next_int = int.from_bytes(next_byte)
         if next_int == 0:
             continue
@@ -196,6 +196,7 @@ def uri_selection():
         return False
 
 def serial_setup():
+    logging("serial setting up")
     global oracle_ready
     global oracle_serial
     global read_thread
@@ -221,6 +222,8 @@ def serial_setup():
         serial_reading = False
         oracle_ready = True
         logging("ComPort not found, please select another.", notify=True)
+    except Exception as e:
+        logging("serial_setup error: " + str(e))
 
 def general_setup():
     while setting_up:
@@ -237,7 +240,6 @@ def general_setup():
                 continue
             logging("Setup changed from " + setup_instance)
             if str(setup_instance) == "Status changed" or str(setup_instance) == "Refresh":
-                logging("status from setup")
                 status_update = True
             #old_config = None
             #if 'oracle_config' in locals():
@@ -248,7 +250,7 @@ def general_setup():
                 logging("Old colour: " + str(old_config['Colour']) + "\nNew colour: " + str(oracle_config['Colour']))
                 if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
                     updated = uri_selection()
-                if old_config['ComPort'] != oracle_config['ComPort']:
+                if old_config['ComPort'] != oracle_config['ComPort'] or str(setup_instance) == "serial_reader":
                     serial_setup()
                 if old_config['Colour'] != oracle_config['Colour']:
                     update_colour()
@@ -341,7 +343,7 @@ def data_handler(*args):
                 thumb = properties['Metadata']['mpris:artUrl']
                 with Image(filename=thumb) as img:
                     img.transform(resize='304x304')
-                    img.background_color = Color('black')
+                    img.background_color = wand_color('black')
                     img.extent(304, 304, gravity='center')
                     img.save(filename='thumby.png')
                     pixels = img.export_pixels(channel_map="RGB")
@@ -453,7 +455,7 @@ def next_wallpaper(direction=1):
 
     with Image(filename=thumb) as img:
         img.transform(resize='304x304')
-        img.background_color = Color('black')
+        img.background_color = wand_color('black')
         img.extent(304, 304, gravity='center')
         img.save(filename='thumby.png')
         pixels = img.export_pixels(channel_map="RGB")
@@ -481,6 +483,7 @@ def serial_write_bytes():
                 time.sleep(0.2)
             if maxed_attemps:
                 writer_queue.task_done()
+                config_handler.setup_queue.put("serial_reader")
                 continue
             oracle_ready = False
             dur = 0 if "dur" not in kwargs else kwargs['dur']
