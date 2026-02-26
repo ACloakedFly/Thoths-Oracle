@@ -104,8 +104,8 @@ AlbumArtist: false
 MonitoredProgram:
 - fireFOX.exe #On windows 11 use 308046B0AF4A39CB
 - musicbee.exe
-#- vlc.exe
-#- SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify
+- vlc.exe
+- SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify
 
 #Display the following text when in wallpaper mode
 WallpaperTitle: 'Wallpaper Mode'
@@ -202,21 +202,23 @@ LogContinuous: false
             ExceptionHandler(ex);
         }
     }
-    private static FileSystemWatcher watcher = new("\\");
+    private static FileSystemWatcher watcher = new();
+    static DateTime config_last;
     private static FileSystemWatcher wallpaper_watcher = new(wallpapers_path);
     public static void ConfigChangeHandler()
     {
-        Directory.CreateDirectory(wallpapers_path);
+        watcher.Path = Directory.GetCurrentDirectory();
+        watcher.Filter = default_path;
         watcher.NotifyFilter = NotifyFilters.LastWrite;
+        watcher.IncludeSubdirectories = false;
+        watcher.EnableRaisingEvents = true;
 
         watcher.Changed += OnChanged;
         watcher.Created += OnChanged;
         watcher.Error += OnError;
 
-        watcher.Filter = default_path;
-        watcher.IncludeSubdirectories = true;
-        watcher.EnableRaisingEvents = true;
 
+        Directory.CreateDirectory(wallpapers_path);
         wallpaper_watcher.NotifyFilter = NotifyFilters.LastWrite;
 
         wallpaper_watcher.Changed += OnWallpapersChanged;
@@ -224,16 +226,25 @@ LogContinuous: false
         wallpaper_watcher.Error += OnError;
 
         wallpaper_watcher.EnableRaisingEvents = true;
+
+        config_last = DateTime.Now;
     }
     private static void OnChanged(object sender, FileSystemEventArgs e)
     {
+        TimeSpan delta = DateTime.Now - config_last;
+        config_last = DateTime.Now;
+        if (delta.TotalMilliseconds < 1000)
+        {
+            DeviceHandler.WriteLog("Config already changed ");
+            return;
+        }
         DeviceHandler.WriteLog("Config changed ");
         Thread.Sleep(500);
         GUI.media_writer_queue.TryEnqueue(DeviceHandler.GeneralSetup);
     }
     private static void OnError(object sender, ErrorEventArgs e)
     {
-        DeviceHandler.WriteLog("FileSystemWatcher error " + e.ToString());
+        DeviceHandler.WriteLog("FileSystemWatcher error " + e.ToString() + e.GetException().ToString() + " From " + sender.ToString());
     }
     private static void OnWallpapersChanged(object sender, FileSystemEventArgs e)
     {

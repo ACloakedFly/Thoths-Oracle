@@ -26,6 +26,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include <stdlib.h>
 #include <stdint.h>
 #include <wchar.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -85,6 +86,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define STATUS_TAG      7
 #define FINISHED_TAG    8
 #define ERROR_TAG       9
+#define COLOUR_TAG      10
 
 //Display
 #define PIN_NUM_SCLK        11
@@ -127,6 +129,7 @@ extern uint32_t song_position;
 extern bool name_dirty;
 extern bool position_dirty;
 extern bool time_dirty;
+extern bool theme_dirty;
 extern bool img_dirty;
 extern bool song_playing;
 
@@ -137,6 +140,8 @@ typedef struct sys_time{
     uint16_t year;
 } sys_time;
 extern sys_time system_time;
+extern lv_color32_t system_bar_colour;
+extern lv_color32_t system_line_colour;
 
 extern SemaphoreHandle_t info_mutex;
 extern SemaphoreHandle_t img_mutex;

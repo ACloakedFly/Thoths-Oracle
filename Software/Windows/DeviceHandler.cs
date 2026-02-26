@@ -54,6 +54,8 @@ class DeviceHandler
         public const byte NextTrack = 6;
     }
     public static CoreAudioDevice? playback_device;
+    static CoreAudioController coreAudioController = new();
+    static bool default_device = false;
     static bool queued_media = false;
     static bool oracle_ready = true;
     private static readonly bool debug_log = true;
@@ -100,6 +102,7 @@ class DeviceHandler
     private static Mutex reconnect_mutex = new();
     private static SemaphoreSlim media_mutex = new(1, 1);
     private static bool disconnect_msg_sent = false;
+    private static bool media_com_exception = false;
     public class BalloonTip
     {
         public string title = "";
@@ -111,13 +114,13 @@ class DeviceHandler
     private static GlobalSystemMediaTransportControlsSessionManager? gsmtcsm;
     public static void HandlerSetup()
     {
-        config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
-        old_config = config;
-        GUI.oracle_Configuration = config;
         Directory.CreateDirectory(ConfigHandler.wallpapers_path);
         wallpapers = Directory.GetFiles(wallpaper_path).ToList();
         if (debug_log)
             DebugLogs();
+        config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
+        old_config = config;
+        GUI.oracle_Configuration = config;
         GeneralSetup();
         GUI.read_thread.Start();
 
@@ -158,6 +161,7 @@ class DeviceHandler
         reconnect_timer.IsRepeating = true;
         if (!device_connected)
             reconnect_timer.Start();
+        GUI.config_thread.Start();
     }
 
     private static void MediaCheck(DispatcherQueueTimer timer, object sender)
@@ -166,7 +170,16 @@ class DeviceHandler
             return;
         if (config.WallpaperMode || !queued_media || !device_connected)
             return;
-        Update_Media(gsmtcs, null);
+        if (media_com_exception)
+        {
+            GeneralSetup();
+            previous_control_session = null;
+            media_com_exception = false;
+        }
+        else
+        {
+            Update_Media(gsmtcs, null);
+        }
     }
 
     private static void IncrementWallpaper()
@@ -263,9 +276,20 @@ class DeviceHandler
         config = ConfigHandler.LoadConfig(ConfigHandler.default_path);
         if (config.PlaybackDevice != null)
         {
+            if(config.PlaybackDevice.Equals("Default Device"))
+                default_device = true;
+            else
+                default_device = false;
             WriteLog("Looking for " + config.PlaybackDevice);
-            CoreAudioController coreAudioController = new();
-            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia));
+            coreAudioController = new();
+            CoreAudioDevice defaultDevice = coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia);
+            playback_device = coreAudioController.GetPlaybackDevices(DeviceState.Active).FirstOrDefault(c => c != null && c.Name == config.PlaybackDevice, defaultDevice);// GetDefaultCAD(config.PlaybackDevice));
+            if(playback_device.GetHashCode() == defaultDevice.GetHashCode() && !"Default Device".Equals(config.PlaybackDevice))
+            {
+                BalloonTip tip = new(){icon = ToolTipIcon.Warning, title = "Device: " + config.PlaybackDevice + " Not Found"};
+                WriteLog("Falling back to Default Device", true, null, tip);
+            }
+
         }
         if (playback_device != null)
             WriteLog("Found device: " + playback_device.Name);
@@ -299,6 +323,7 @@ class DeviceHandler
         if (session_list.Count < 1 || config.MonitoredProgram.Count < 1)
         {
             WriteLog("No sessions or none monitored");
+            previous_control_session = null;
             return;
         }
         foreach (var session in session_list)
@@ -378,20 +403,23 @@ class DeviceHandler
         {
             media_properties = sender.TryGetMediaPropertiesAsync().GetAwaiter().GetResult();
         }
-        catch (COMException ex)
+        catch (COMException)
         {
             queued_media = true;
-            WriteLog(ex.ToString());
+            media_com_exception = true;
             media_mutex.Release();
             return 3;
         }
+        int title_length = media_properties.Title.Length;
+        int album_length = media_properties.AlbumTitle.Length;
+        int artist_length = config.AlbumArtist ? media_properties.AlbumArtist.Length: media_properties.Artist.Length;
         Info_Buffers info_ = new()
         {
-            Title = media_properties.Title.Length > 0 ? media_properties.Title : "No Data",
-            Album = media_properties.AlbumTitle.Length > 0 ? media_properties.AlbumTitle : "No Data",
-            Artist = media_properties.Artist.Length > 0 ? media_properties.Artist : "No Data"
+            Title = title_length > 0 ? media_properties.Title : "No Data",
+            Album = album_length > 0 ? media_properties.AlbumTitle : "No Data",
+            Artist = artist_length > 0 ? (config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist) : "No Data",
         };
-        info_.Artist = config.AlbumArtist ? media_properties.AlbumArtist : media_properties.Artist;
+
         new_media = info_.Title + "\n" + info_.Album + "\n" + info_.Artist + "\n";
         if (new_media.Equals(captured_media))
         {
@@ -399,6 +427,14 @@ class DeviceHandler
             queued_media = false;
             return 2;
         }
+
+        if(title_length + album_length + artist_length == 0)
+        {
+            media_mutex.Release();
+            queued_media = true;
+            return 7;
+        }
+
         string? cause = args == null ? " " : args.GetType().ToString();
         cause ??= "";
         WriteLog("We are current \n" + new_media + "\nCause of media update: " + cause);
@@ -543,6 +579,15 @@ class DeviceHandler
                 log_message = "The port is closed or another being is attempting communication. Terminate the intermeddler.";
                 WriteLog(log_message, true, null, serial_tip);
                 break;
+            case COMException:
+                serial_tip.title = "Thoth Disconnected";
+                log_message = "Thoth has lost contact. What is this blasphemy?";
+                WriteLog(log_message, true, null, serial_tip);
+                break;
+            case IOException:
+                log_message = "IOException";
+                WriteLog(log_message);
+                break;
             default:
                 WriteLog(exception.Message);
                 break;
@@ -625,67 +670,95 @@ class DeviceHandler
     public static async void DecodeRead(string oracle_message, int code, int cmd)
     {
         double vol;
-        if (code == ComCodes.Error)
+        try
         {
-            serial_error = 1;
-            WriteLog("Code: " + code + " Command: " + cmd + " Message: " + oracle_message);
-        }
-        else if (code == ComCodes.Idling || code == ComCodes.Finished)
-        {
-            WriteLog("Serial has acknowledged: '" + oracle_message + "'!");
-            oracle_ready = true;
-        }
-        else if (code == ComCodes.Status)
-        {
-            WriteLog("Serial responded: '" + oracle_message + "'");
-        }
-        else if (code == ComCodes.Input)
-        {
-            WriteLog("Oracle requests command " + cmd);
-            if (cmd <= InputCodes.Mute && playback_device != null)
+            if (code == ComCodes.Error)
             {
-                vol = await playback_device.GetVolumeAsync();
-                if (cmd == InputCodes.VolumeDown && vol != 0)
+                serial_error = 1;
+                WriteLog("Code: " + code + " Command: " + cmd + " Message: " + oracle_message);
+            }
+            else if (code == ComCodes.Idling || code == ComCodes.Finished)
+            {
+                WriteLog("Serial has acknowledged: '" + oracle_message + "'!");
+                oracle_ready = true;
+            }
+            else if (code == ComCodes.Status)
+            {
+                WriteLog("Serial responded: '" + oracle_message + "'");
+            }
+            else if (code == ComCodes.Input)
+            {
+                if (cmd <= InputCodes.Mute && playback_device != null)
                 {
-                    await playback_device.SetVolumeAsync(vol - config.VolumeSensitivity);
+                    if(default_device && !playback_device.IsDefaultDevice)
+                        playback_device = coreAudioController.GetDefaultDevice(DeviceType.Playback, Role.Multimedia);
+                    
+                    WriteLog("Oracle requests volume " + cmd + " for device " + playback_device.FullName);
+                    vol = await playback_device.GetVolumeAsync();
+                    if (cmd == InputCodes.VolumeDown && vol != 0)
+                    {
+                        await playback_device.SetVolumeAsync(vol - config.VolumeSensitivity);
+                    }
+                    else if (cmd == InputCodes.VolumeUp && vol != 100)
+                    {
+                        await playback_device.SetVolumeAsync(vol + config.VolumeSensitivity);
+                    }
+                    else if (cmd == InputCodes.Mute)
+                    {
+                        await playback_device.ToggleMuteAsync();
+                    }
                 }
-                else if (cmd == InputCodes.VolumeUp && vol != 100)
+                else if (cmd > InputCodes.Mute)
                 {
-                    await playback_device.SetVolumeAsync(vol + config.VolumeSensitivity);
+                    WriteLog("Oracle requests navigation " + cmd);
+                    if (config.WallpaperMode)
+                    {
+                        if (cmd == InputCodes.Mute)
+                            GUI.media_writer_queue.TryEnqueue(WallpaperPlayPause);
+                        else if (cmd == InputCodes.NextTrack)
+                            GUI.media_writer_queue.TryEnqueue(IncrementWallpaper);
+                        else if (cmd == InputCodes.PreviousTrack)
+                            GUI.media_writer_queue.TryEnqueue(DecrementWallpaper);
+                    }
+                    else if (!config.WallpaperMode && gsmtcs != null)
+                    {
+                        if (cmd == InputCodes.PreviousTrack)
+                            await gsmtcs.TrySkipPreviousAsync();
+                        else if (cmd == InputCodes.PlayPause)
+                            await gsmtcs.TryTogglePlayPauseAsync();
+                        else if (cmd == InputCodes.NextTrack)
+                            await gsmtcs.TrySkipNextAsync();
+                    }
                 }
-                else if (cmd == InputCodes.Mute)
+                if (gsmtcs == null && !config.WallpaperMode && cmd > 3)
                 {
-                    await playback_device.ToggleMuteAsync();
+                    WriteLog("No current media session and not in wallpaper mode :(");
+                    GUI.media_writer_queue.TryEnqueue(OnRequestSessionRefresh);
                 }
             }
-            else if (cmd > InputCodes.Mute)
-            {
-                if (config.WallpaperMode)
-                {
-                    if (cmd == InputCodes.Mute)
-                        GUI.media_writer_queue.TryEnqueue(WallpaperPlayPause);
-                    else if (cmd == InputCodes.NextTrack)
-                        GUI.media_writer_queue.TryEnqueue(IncrementWallpaper);
-                    else if (cmd == InputCodes.PreviousTrack)
-                        GUI.media_writer_queue.TryEnqueue(DecrementWallpaper);
-                }
-                else if (!config.WallpaperMode && gsmtcs != null)
-                {
-                    if (cmd == InputCodes.PreviousTrack)
-                        await gsmtcs.TrySkipPreviousAsync();
-                    else if (cmd == InputCodes.PlayPause)
-                        await gsmtcs.TryTogglePlayPauseAsync();
-                    else if (cmd == InputCodes.NextTrack)
-                        await gsmtcs.TrySkipNextAsync();
-                }
-            }
-            if (gsmtcs == null && !config.WallpaperMode)
-            {
-                WriteLog("No current media session and not in wallpaper mode :(");
+        }
+        catch(Exception e)
+        {
+            Command_Exception_Handler(e);
+        }
+        
+    }
+
+    private static void Command_Exception_Handler(Exception exception)
+    {
+        switch (exception)
+        {
+            case COMException:
+                WriteLog("No current media session :(");
+                gsmtcs = null;
                 GUI.media_writer_queue.TryEnqueue(OnRequestSessionRefresh);
-            }
+                break;
+            default:
+                WriteLog(exception.Message);
+                break;
         }
     }
+
     private static void Write_Bytes(byte tag, uint length, byte[]? data, ushort width, ushort height, uint dur = 0)
     {
         if (!device_connected)
@@ -726,15 +799,9 @@ class DeviceHandler
         {
             serialPort.Write(bytes, 0, bytes.Length);
         }
-        catch (InvalidOperationException)
+        catch (Exception ex)
         {
-            WriteLog("Device disconnected, InvalidOp");
-            device_connected = false;
-        }
-        catch (IOException)
-        {
-            WriteLog("Device disconnected, IOEx");
-            device_connected = false;
+            SerialExceptionHandler(ex);
         }
     }
 

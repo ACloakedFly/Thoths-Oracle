@@ -123,7 +123,8 @@ $ sudo reboot
 
 To launch on startup using using Startup Applications Preferences:
 -  Add a new entry named Thoths Oracle.
--  Change the command to the location you extracted Thoth's Oracle in.
+-  If you have installed the .desktop file, set the command to gtk-launch thoths_oracle.desktop
+-  Otherwise, change the command to the location you extracted Thoth's Oracle in.
     - eg. /home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
 - Add a comment if desired and save.
 

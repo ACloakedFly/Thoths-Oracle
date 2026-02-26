@@ -86,16 +86,22 @@ namespace Contexts
         public static DispatcherQueue media_writer_queue = DispatcherQueue.GetForCurrentThread();
         public static Oracle_Configuration oracle_Configuration = new() { MonitoredProgram = new() };
         static readonly Oracle_Configuration oracle_Config_Old = new(){MonitoredProgram = new()};
+        private static bool first_config = true;
 
         private GUI()
         {
-            string icon_paths = "..\\Icons_Images\\";
+            string icon_paths = "Icons_Images\\";
             string path_icon = icon_paths + "huge.png";
             Image logo_img = SystemIcons.Application.ToBitmap();
             Image exit_symbol = SystemIcons.Error.ToBitmap();
-            Bitmap logo_icon = SystemIcons.Error.ToBitmap();
+            Bitmap logo_icon = SystemIcons.Application.ToBitmap();
             try
             {
+                DirectoryInfo? dir = Directory.GetParent(Directory.GetCurrentDirectory());
+                if(dir != null)
+                    icon_paths = Directory.Exists(icon_paths)? icon_paths : dir.ToString() + "\\" + icon_paths;
+                    
+                path_icon = icon_paths + "huge.png";
                 logo_img = Image.FromFile(icon_paths + "small.png");
                 selected_img = Image.FromFile(icon_paths + "Selected.png");
                 exit_symbol = Image.FromFile(icon_paths + "Exit_Symbol.png");
@@ -115,8 +121,7 @@ namespace Contexts
             wallpaper_mode.DropDownItems.Add(new ToolStripMenuItem("Enabled", null, OnWallpaperToggle));
             default_audio_output = new ToolStripMenuItem("Default Device", null, OnSetAudioDevice);
             output.DropDownItems.Add(default_audio_output);
-            default_audio_output.Image = selected_img;
-
+            //default_audio_output.Image = selected_img;
 
             title = new("Thoth's Oracle", null)
             {
@@ -263,10 +268,15 @@ namespace Contexts
                 output.DropDownItems.Add(c.Name, null, new EventHandler(OnSetAudioDevice));
                 if (c.Name.Equals(oracle_Configuration.PlaybackDevice))
                 {
-                    output.DropDownItems[index].Image = selected_img;
                     default_audio_output.Image = null;
+                    output.DropDownItems[index].Image = selected_img;
                 }
                 index++;
+            }
+            if(first_config && "Default Device".Equals(oracle_Configuration.PlaybackDevice))
+            {
+                first_config = false;
+                default_audio_output.Image = selected_img;
             }
         }
         private void OnSetAudioDevice(object? sender, EventArgs args)
@@ -315,7 +325,6 @@ namespace Contexts
         [STAThread]
         public static void Main(string[] args)
         {
-            config_thread.Start();
             Thread.Sleep(100);
             media_writer_queue = DispatcherQueueController.CreateOnDedicatedThread().DispatcherQueue;
             media_writer_queue.TryEnqueue(DeviceHandler.HandlerSetup);

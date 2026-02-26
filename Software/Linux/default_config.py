@@ -19,6 +19,9 @@ WallpaperMode: false
 WallpaperPeriod: 5
 #Change this if you want the album artist displayed instead of the artist, or vice versa
 AlbumArtist: false
+#Update your theme! The line under the date/time will be a slightly darker shade than this.
+Colour: 0xee00ff
+ColourAlt: 0x8f0099
 #Change which programs Thoth's Oracle listens to. Case insenstive.
 #If multiple are provided, their order represents their priority (top is first). Only the highest active program will be used.
 #If none are provided or none listed are found, program will not listen to any. This is to prevent some programs that drop their sessions when changing tracks.

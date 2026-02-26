@@ -1,10 +1,12 @@
 #Example desktop entry
 #Modify Exec, Path, and Icon based on where you have placed the program
+#Then run 	desktop-file-validate thoths_oracle.desktop
+#And 		desktop-file-install thoths_oracle.desktop
 [Desktop Entry]
 Type=Application
 Name=Thoths Oracle
 Comment=Media Companion
-Exec=/home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
+Exec=env GDK_BACKEND=x11 /home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
 Path=/home/dominique/Documents/Programs/Thoths_Oracle_linux/
 Icon=/home/dominique/Documents/Programs/Thoths_Oracle_linux/Icons_Images/huge.png
 Terminal=false
