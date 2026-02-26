@@ -137,6 +137,7 @@ def refresh_ports():
     update_menu()
 
 def reset_oracle():
+    refresh_ports()
     setup_queue.put("Refresh")
 
 def ui_setup():

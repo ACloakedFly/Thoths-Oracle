@@ -80,27 +80,40 @@ global seeked_signal
 global bus
 global media_check_thread
 global media_handler
+global player_uri
+player_uri = ""
+
+MAX_ATTEMPTS = 20
+#Message types
+IMG_TAG =       1
+TEXT_TAG =      2
+SYS_MSG_TAG =   3
+DUR_POS_TAG =   4
+CMD_TAG =       5
+INFO_TAG =      6
+STATUS_TAG =    7
+FINISHED_TAG =  8
+ERROR_TAG =     9
+COLOUR_TAG =    10
+CODES = ["img_tag", "text_tag", "sys_msg_tag", "dur_pos_tag", "cmd_tag", "info_tag", "status_tag", "finished_tag", "error_tag", "colour_tag"]
 
 def serial_decode(code, cmd):
     global wallpaper_paused
     global queued_media
-    if code == 9:
+    if code == ERROR_TAG:
         queued_media = True
-    elif code == 7 or code == 8:
-        #print("Oracle Ready")
+    elif code == STATUS_TAG or code == FINISHED_TAG:
         global oracle_ready
         oracle_ready = True
-    elif code == 5:
-        #print("Serial read config: ", oracle_config)
+    elif code == CMD_TAG:
         vol_sens = 3 if oracle_config['VolumeSensitivity'] is None else oracle_config['VolumeSensitivity']
         try:
             if cmd == 1:
                 player.Volume -= vol_sens/100
-                logging(str(player.Volume))
             elif cmd == 2:
                 player.Volume += vol_sens/100
             elif cmd == 3:
-                player.Volume = 0
+                player.Volume = 0.0
             elif cmd == 4:
                 if wallpaper_mode:
                     wallpaper_timer.cancel()
@@ -158,36 +171,41 @@ def serial_reader():
             code = -1
             command = -1
 
-def uri_selection():
+def uri_selection(skip = False, sender_uri = ""):
     global player
     global status_signal
     global media_handler
+    global player_uri
     uri_list = get_players_uri()
     uri_string = '\n'.join(uri_list)
-    logging(uri_string, mode='a', file_name=URI_FILE, time_stamp=False)
-    uri_ordered = []
-    for program in oracle_config['MonitoredProgram']:
-        matched_uri = re.findall(".*MediaPlayer2.*" + program + ".*", uri_string, flags=re.IGNORECASE)
-        if len(matched_uri) > 0:
-            uri_ordered.append(matched_uri[0])
-            
-    if len(uri_ordered) == 0:
-        uri_ordered.append("")
-    logging("Ordered matches: ")
-    logging("\n".join(uri_ordered))
-    uri = uri_ordered[0]
-    if uri != "":
+    if skip and sender_uri in uri_list:
+        player_uri = sender_uri
+    else:
+        logging(uri_string, mode='a', file_name=URI_FILE, time_stamp=False)
+        uri_ordered = []
+        for program in oracle_config['MonitoredProgram']:
+            matched_uri = re.findall(".*MediaPlayer2.*" + program + ".*", uri_string, flags=re.IGNORECASE)
+            if len(matched_uri) > 0:
+                uri_ordered.append(matched_uri[0])
+                
+        if len(uri_ordered) == 0:
+            uri_ordered.append("")
+        logging("Ordered matches: ")
+        logging("\n".join(uri_ordered))
+        player_uri = uri_ordered[0]
+    if player_uri != "":
         try:
-            player = Player(dbus_interface_info={'dbus_uri': uri})
-            if media_handler is not None:
-                media_handler.remove()
-            media_handler = bus.add_signal_receiver(handler_function=player_handler, bus_name=str(uri), dbus_interface='org.freedesktop.DBus.Properties')
-            logging("Connected to " + str(uri) + " playing? " + str(player.PlaybackStatus))
+            player = Player(dbus_interface_info={'dbus_uri': player_uri})
+            logging("Connected to " + player_uri + " playing? " + str(player.PlaybackStatus))
             if player.PlaybackStatus == "Stopped":
                 status_signal.remove()
-                status_signal = bus.add_signal_receiver(handler_function=status_changed, bus_name=str(uri), path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties', sender_keyword="sender", destination_keyword="destination", interface_keyword="interface", member_keyword="member", path_keyword="path", message_keyword="msg") 
+                status_signal = bus.add_signal_receiver(handler_function=status_changed, bus_name=player_uri, path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties', sender_keyword="sender", destination_keyword="destination", interface_keyword="interface", member_keyword="member", path_keyword="path", message_keyword="msg") 
+            else:
+                media_handler.remove()
+                media_handler = bus.add_signal_receiver(handler_function=player_handler, bus_name=player_uri, dbus_interface='org.freedesktop.DBus.Properties')
+            if skip:
+                config_handler.setup_queue.put("Session changed")
             return True
-        
         except Exception as e:
             logging("If AppArmor issue, please resolve, then restart app\n" + str(e), notify=True)
             return False
@@ -214,9 +232,9 @@ def serial_setup():
             read_thread = threading.Thread(target=serial_reader, name="SerialRead")
             read_thread.start()
             update_date_time()
+            logging("Connected to device")
         else:
             serial_reading = False
-        logging("Connected to device")
     except serial.SerialException as e:
         oracle_serial = None
         serial_reading = False
@@ -231,23 +249,15 @@ def general_setup():
         global old_config
         global wallpaper_mode
         global wallpaper_period
-        status_update = False
-        updated = False
+        updated = True
         try:
             time.sleep(0.5)
-            setup_instance = config_handler.setup_queue.get(block=True)
+            setup_instance = config_handler.setup_queue.get(block=True, timeout=1)
             if exitting or str(setup_instance) == "Exit":
                 continue
             logging("Setup changed from " + setup_instance)
-            if str(setup_instance) == "Status changed" or str(setup_instance) == "Refresh":
-                status_update = True
-            #old_config = None
-            #if 'oracle_config' in locals():
-            #    old_config = oracle_config
             oracle_config = load_config()
-            #if status_update is False:
             if old_config != None:
-                logging("Old colour: " + str(old_config['Colour']) + "\nNew colour: " + str(oracle_config['Colour']))
                 if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
                     updated = uri_selection()
                 if old_config['ComPort'] != oracle_config['ComPort'] or str(setup_instance) == "serial_reader":
@@ -259,8 +269,7 @@ def general_setup():
                 serial_setup()
                 update_colour()
             old_config = oracle_config
-            #else:
-            #    updated = uri_selection()
+
             wallpaper_mode = oracle_config['WallpaperMode']
             wallpaper_period = oracle_config['WallpaperPeriod']*60
             if wallpaper_mode:
@@ -302,14 +311,14 @@ def update_colour():
     ci = int(c.get_hex_l().removeprefix("#"), 16)
     cdi = int(cd.get_hex_l().removeprefix("#"), 16)
     logging("Progress bar colour: " + str(c.get_hex_l()) + " date/time line colour: " + str(cd.get_hex_l()))
-    writer_queue.put(dict(tag=10, length=cdi, data=None, width=0, height=0, dur=ci))
+    writer_queue.put(dict(tag=COLOUR_TAG, length=cdi, data=None, width=0, height=0, dur=ci))
 
 def update_date_time():
     #Date and time
     current_time = datetime.datetime.now()
     day_month = int(current_time.day + (current_time.month << 8))
     current_seconds = int((current_time-datetime.datetime(current_time.year, current_time.month, current_time.day)).total_seconds())
-    writer_queue.put(dict(tag=3, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
+    writer_queue.put(dict(tag=SYS_MSG_TAG, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
 
 def data_handler(*args):
     global duration
@@ -332,12 +341,12 @@ def data_handler(*args):
                 if properties['PlaybackStatus'] == "Playing":
                     #logging("Playback status: " + properties['PlaybackStatus'])
                     playing = 1
-            writer_queue.put(dict(tag=4, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+            writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
             #Text data
             artists = ", ".join([str(ele) for ele in properties['Metadata']['xesam:albumArtist']]) if oracle_config['AlbumArtist'] else ", ".join([str(ele) for ele in properties['Metadata']['xesam:artist']])
             meta_text = properties['Metadata']['xesam:title'] + "\n" + artists + "\n" + properties['Metadata']['xesam:album'] + "\n"
             meta_bytes = bytearray(meta_text, encoding='utf8')
-            writer_queue.put(dict(tag=2, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
+            writer_queue.put(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
             #Image data
             if "mpris:artUrl" in properties['Metadata']:
                 thumb = properties['Metadata']['mpris:artUrl']
@@ -348,49 +357,59 @@ def data_handler(*args):
                     img.save(filename='thumby.png')
                     pixels = img.export_pixels(channel_map="RGB")
                     rgb565 = convert_to_565(pixels)
-                    writer_queue.put(dict(tag=1, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
+                    writer_queue.put(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
         except KeyError:
             pass
     #Playback changed
     if "PlaybackStatus" in properties:
-        #logging("Playback status: " + properties['PlaybackStatus'])
+        logging("Playback status: " + properties['PlaybackStatus'])
         playing = 0
         if properties['PlaybackStatus'] == "Playing":
             playing = 1
         pos_dur = bytearray()
         pos_dur.extend(position.to_bytes(4, 'little'))
         pos_dur.extend(duration.to_bytes(4, 'little'))
-        writer_queue.put(dict(tag=4, length=len(pos_dur), data=pos_dur, width=playing, height=0))
-    
+        writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=0))
+
+def log_media(*media):
+    if "Metadata" in media[0]:
+        try:
+            logging(str(media[0]['Metadata']['xesam:title']) + "\n" + str(media[0]['Metadata']['xesam:albumArtist'][0]) + "\n" + str(media[0]['Metadata']['xesam:album']), time_stamp=False)
+        except:
+            pass
+    pass 
 
 def queue_handler():
     global queued_media
     while meta_reading:
         try:
-            #properties = meta_queue.get()[0]
-            properties = meta_queue.get()
+            properties = meta_queue.get(timeout=1)
             if exitting:
                 return
             if meta_queue.qsize() >= 5:
+                meta_queue.task_done()
+                while meta_queue.not_empty:
+                    meta_queue.get(block=False)
+                    meta_queue.task_done()
                 #logging(" ending prematurely ")
                 queued_media = True
-                meta_queue.task_done()
             elif len(properties) == 1:
                 #logging("Sending properties: " + str(properties))
                 data_handler(properties)
-                meta_queue.task_done()
             elif len(properties) >= 2:
                 if type(properties[1]) is dbus.Dictionary:
                     #logging("Sending properties" + str(properties[1]))
                     data_handler(properties[1])
+                    log_media(properties[1])
                 else:
                     data_handler(properties[0])
+                    log_media(properties[0])
+            
             else:
                 #logging("Not right " + str(len(properties)) + " \n" + str(properties))
                 pass
+            meta_queue.task_done()
         except queue.Empty:
-            logging("Queue empty")
-            queued_media = True
             pass
 
 
@@ -401,14 +420,15 @@ def media_check():
             if queued_media:
                 queued_media = False
                 if player is not None:
+                    time.sleep(2)
                     values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
                     meta_queue.put((values, 0), block=False)
-                #logging("putting properties: " + str(values))
+            else:
+                time.sleep(1)
         except queue.Full:
             pass
         except dbus.exceptions.DBusException:
             pass
-        time.sleep(0.5)
 
 def player_handler(*args, **kw):
     global queued_media
@@ -433,7 +453,7 @@ def wallpaper_handler():
 def pause_wallpaper():
     pos_dur = bytearray(8)
     playing = 0
-    writer_queue.put(dict(tag=4, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+    writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
 
 def next_wallpaper(direction=1):
     global wallpaper_index
@@ -444,14 +464,14 @@ def next_wallpaper(direction=1):
     logging("Loading next image: " + thumb)
     meta_text = oracle_config['WallpaperTitle'] + "\n" + oracle_config['WallpaperAlbum'] + "\n" + oracle_config['WallpaperArtist'] + "\n"
     meta_bytes = bytearray(meta_text, encoding='utf8')
-    writer_queue.put(dict(tag=2, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
+    writer_queue.put(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
 
     #Position and duration
     pos_dur = bytearray(4)
     duration = oracle_config['WallpaperPeriod']*60
     pos_dur.extend(duration.to_bytes(4, 'little'))
     playing = 1
-    writer_queue.put(dict(tag=4, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+    writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
 
     with Image(filename=thumb) as img:
         img.transform(resize='304x304')
@@ -460,7 +480,7 @@ def next_wallpaper(direction=1):
         img.save(filename='thumby.png')
         pixels = img.export_pixels(channel_map="RGB")
         rgb565 = convert_to_565(pixels)
-        writer_queue.put(dict(tag=1, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
+        writer_queue.put(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
     
     if wallpaper_mode:
         wallpaper_timer = threading.Timer(interval=wallpaper_period, function=next_wallpaper)
@@ -469,21 +489,21 @@ def next_wallpaper(direction=1):
 def serial_write_bytes():
     while serial_writing:
         try:
-            kwargs = writer_queue.get()#timeout=1)
+            kwargs = writer_queue.get(timeout=1)
             if exitting:
                 return
             attemps = 0
             maxed_attemps = False
             global oracle_ready
             while not oracle_ready and not maxed_attemps:
-                if attemps >= 2:
-                    logging("Tried to send " + str(kwargs['tag']) + " oracle timed out")
+                if attemps >= MAX_ATTEMPTS:
+                    logging("Tried to send " + CODES[kwargs['tag']-1] + " oracle timed out " + str(oracle_ready))
                     maxed_attemps = True
                 attemps+=1
                 time.sleep(0.2)
             if maxed_attemps:
                 writer_queue.task_done()
-                config_handler.setup_queue.put("serial_reader")
+                #config_handler.setup_queue.put("serial_writer")
                 continue
             oracle_ready = False
             dur = 0 if "dur" not in kwargs else kwargs['dur']
@@ -495,23 +515,32 @@ def serial_write_bytes():
             if kwargs['data'] is not None:
                 bytes_to_send.extend(kwargs['data'])
             #print(" ".join(hex(b) for b in bytes_to_send))
-            if oracle_serial != None:
+            if oracle_serial != None and oracle_serial.writable():
                 oracle_serial.write(bytes_to_send)
             writer_queue.task_done()
         except queue.Empty:
             pass
 
+
 def session_changed(*args, **kwargs):
+    global media_handler
+    global status_signal
+    global player
     sender = str(args[0])
     if "MediaPlayer2" in sender:
         for program in oracle_config['MonitoredProgram']:
             name = re.search(program, sender, flags=re.IGNORECASE)
             if name:
-                logging("Session changed to " + str(sender))
-                config_handler.setup_queue.put("Session changed")
+                logging("Session changed to " + sender)
+                uri_selection(skip=True, sender_uri=sender)
     
 def status_changed(*args, **kwargs):
+    global bus
+    global media_handler
     status_signal.remove()
+    media_handler.remove()
+    logging("Activating uri " + player_uri)
+    media_handler = bus.add_signal_receiver(handler_function=player_handler, bus_name=player_uri, dbus_interface='org.freedesktop.DBus.Properties', sender_keyword="sender", destination_keyword="destination", interface_keyword="interface", member_keyword="member", path_keyword="path", message_keyword="msg")
     logging("Status changed " + str(args) + "\n " + str(kwargs))
     config_handler.setup_queue.put("Status changed")
 
@@ -535,11 +564,12 @@ def main_setup():
     global status_signal
     global old_config
     global player
+    global oracle_config
     exitting = False
     read_thread = threading.Thread(target=serial_reader, name="SerialRead")
     logging("Start log", mode='w')
     logging("", mode='w', file_name=URI_FILE, time_stamp=False)
-    meta_queue = queue.Queue(maxsize=40)
+    meta_queue = queue.Queue(maxsize=5)
     DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
     #status_signal = bus.add_signal_receiver(handler_function=status_changed, bus_name='org.mpris.MediaPlayer2.io.bassi.Amberol', path='/org/mpris/MediaPlayer2', dbus_interface='org.freedesktop.DBus.Properties', sender_keyword="sender", destination_keyword="destination", interface_keyword="interface", member_keyword="member", path_keyword="path", message_keyword="msg")
@@ -553,7 +583,6 @@ def main_setup():
     bus.add_signal_receiver(handler_function=session_changed, dbus_interface='org.freedesktop.DBus')
 
     old_config = None
-    player = None
     setup_thread = threading.Thread(target=general_setup)
     setup_thread.start()
 
