@@ -30,6 +30,7 @@ import time
 import datetime
 from wand.image import Image
 from wand.color import Color as wand_color
+from wand import exceptions as wand_exceptions
 from config_handler import config_watcher, load_config, logging, URI_FILE, WALLPAPER_FOLDER
 import config_handler
 import re
@@ -350,6 +351,8 @@ def data_handler(*args):
             #Image data
             if "mpris:artUrl" in properties['Metadata']:
                 thumb = properties['Metadata']['mpris:artUrl']
+                thumb = thumb.replace("%20",  " ")
+                #logging("Opening file: " + thumb)
                 with Image(filename=thumb) as img:
                     img.transform(resize='304x304')
                     img.background_color = wand_color('black')
@@ -360,6 +363,8 @@ def data_handler(*args):
                     writer_queue.put(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
         except KeyError:
             pass
+        except wand_exceptions.BlobError:
+            logging("Error with image file")
     #Playback changed
     if "PlaybackStatus" in properties:
         logging("Playback status: " + properties['PlaybackStatus'])
@@ -412,7 +417,7 @@ def queue_handler():
         except queue.Empty:
             pass
 
-
+#add another queue as buffer for media check rather than a super loop?
 def media_check():
     global queued_media
     while not exitting:
