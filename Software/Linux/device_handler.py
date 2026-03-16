@@ -83,6 +83,8 @@ global media_check_thread
 global media_handler
 global player_uri
 player_uri = ""
+global reconnect
+reconnect = True
 
 MAX_ATTEMPTS = 20
 #Message types
@@ -261,7 +263,7 @@ def general_setup():
             if old_config != None:
                 if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
                     updated = uri_selection()
-                if old_config['ComPort'] != oracle_config['ComPort'] or str(setup_instance) == "serial_reader":
+                if old_config['ComPort'] != oracle_config['ComPort'] or str(setup_instance) == "serial_reader" or str(setup_instance) == "Refresh":
                     serial_setup()
                 if old_config['Colour'] != oracle_config['Colour']:
                     update_colour()
@@ -270,7 +272,8 @@ def general_setup():
                 serial_setup()
                 update_colour()
             old_config = oracle_config
-
+            if str(setup_instance) == "Reconnect":
+                serial_setup()
             wallpaper_mode = oracle_config['WallpaperMode']
             wallpaper_period = oracle_config['WallpaperPeriod']*60
             if wallpaper_mode:
@@ -365,6 +368,8 @@ def data_handler(*args):
             pass
         except wand_exceptions.BlobError:
             logging("Error with image file")
+        except Exception as e:
+            logging("data_handler: " + str(e))
     #Playback changed
     if "PlaybackStatus" in properties:
         logging("Playback status: " + properties['PlaybackStatus'])
@@ -416,36 +421,54 @@ def queue_handler():
             meta_queue.task_done()
         except queue.Empty:
             pass
+        except Exception as e:
+            logging("queue_handler: " + str(e))
 
 #add another queue as buffer for media check rather than a super loop?
 def media_check():
     global queued_media
+    global reconnect
+    counter = 0
+    QUEUED_WAIT = 5 #seconds
+    UNQUEUED_WAIT = 1 #seconds
+    COUNT = 10 / UNQUEUED_WAIT
     while not exitting:
         try:
             if queued_media:
                 queued_media = False
                 if player is not None:
-                    time.sleep(2)
+                    time.sleep(QUEUED_WAIT)
                     values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
                     meta_queue.put((values, 0), block=False)
             else:
-                time.sleep(1)
+                time.sleep(UNQUEUED_WAIT)
+            counter += 1
+            counter %= COUNT
+            if player is not None and counter == COUNT-1 and oracle_serial == None:
+                reconnect = True
+                logging("Reconnecting")
+                config_handler.setup_queue.put("Reconnect")
         except queue.Full:
             pass
         except dbus.exceptions.DBusException:
             pass
+        except Exception as e:
+            logging("media_check: " + str(e))
 
 def player_handler(*args, **kw):
     global queued_media
+    global reconnect
     try:
         if meta_queue.qsize() < 5 and oracle_config['WallpaperMode'] is False:
             #logging("Player handler: " + str(args))
+            reconnect = True
             meta_queue.put(args, block=False)
         else:
             queued_media = True
             #logging("Queue full")
     except Exception as e: 
         queued_media = True
+        logging(str(e))
         #logging("player_handler:" + str(e))
 
 def wallpaper_handler():
@@ -492,6 +515,7 @@ def next_wallpaper(direction=1):
         wallpaper_timer.start()
 
 def serial_write_bytes():
+    global reconnect
     while serial_writing:
         try:
             kwargs = writer_queue.get(timeout=1)
@@ -503,6 +527,9 @@ def serial_write_bytes():
             while not oracle_ready and not maxed_attemps:
                 if attemps >= MAX_ATTEMPTS:
                     logging("Tried to send " + CODES[kwargs['tag']-1] + " oracle timed out " + str(oracle_ready))
+                    if reconnect:
+                        config_handler.setup_queue.put("Reconnect")
+                        reconnect = False
                     maxed_attemps = True
                 attemps+=1
                 time.sleep(0.2)
@@ -525,6 +552,10 @@ def serial_write_bytes():
             writer_queue.task_done()
         except queue.Empty:
             pass
+        except serial.SerialException:
+            reconnect = True
+        except Exception as e:
+            logging("serial_writer: " + str(e))
 
 
 def session_changed(*args, **kwargs):

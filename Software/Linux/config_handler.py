@@ -35,7 +35,7 @@ WALLPAPER_FOLDER = 'wallpapers/'
 LOG_PATH = 'logs/'
 LOG_FILE = 'logs.txt'
 URI_FILE = 'session_IDs.txt'
-MAX_LOG_SIZE = 20971520
+MAX_LOG_SIZE = 20*1024*1024
 #global setup_queue
 setup_queue = queue.Queue(maxsize=1)
 notify_queue = queue.Queue(maxsize=1)
