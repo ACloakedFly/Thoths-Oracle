@@ -19,6 +19,8 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 ===========================================================================
 */
 // ui_handler.py """
+import sys
+
 import pystray
 from pystray import Menu, MenuItem
 from PIL import Image
@@ -54,8 +56,9 @@ def on_exit(icon, query):
     global notifying
     print("Exitting")
     notifying = False
-    main_exit()
     icon.stop()
+    sys.exit()
+    #main_exit()
 
 def on_shortcut():
     subprocess.Popen(["xdg-open", os.curdir])
