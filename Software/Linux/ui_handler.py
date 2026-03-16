@@ -88,7 +88,7 @@ def on_vol_sens_select(icon, query):
 
 def on_colour_select():
     oracle = load_config()
-    oracle['Colour'] = 0xffff00
+    #oracle['Colour'] = 0xffff00
     save_config(oracle)
 
 def refresh_vol_sens():
