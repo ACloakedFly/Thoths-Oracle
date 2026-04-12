@@ -1,6 +1,22 @@
 # Thoth's Oracle
+## Table of Contents:
+- [Features](#Features)
+- [Make your own!](#Make-your-own!)
+- [How it works](#How-it-works)
+  - [Hardware](#Hardware)
+  - [Software](#Software)
+  - [Firmware](#Firmware)
+- [Configuration](#Configuration)
+- [FAQ](#FAQ)
+- [Installation](#Installation)
+  - [Windows](#Windows)
+    - [Launch on startup](#Windows-launch-on-startup)
+  - [Linux](#Linux-(Tested-on-Ubuntu))
+    - [Example](#Example)
+    - [Linux launch on startup](#Linux-launch-on-startup)
+- [License](#License)
 
-USB operated media display/controller for Windows, Linux(, MacOS WIP).
+### USB operated media display/controller for Windows, Linux(, MacOS WIP).
 
 USB music display helps you keep track of what you are listening to without taking up precious screen space. Thoth's Oracle provides a one stop shop for checking on the current media information and basic controls such as skipping tracks, playing and pausing and adjusting the volume.
 ![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4854.JPG)
@@ -91,7 +107,7 @@ Someone ask me something, please.
 
 Companion app is provided as portable application that doesn't need installation. Just download and extract the software file for your system wherever you want and run it!
 
-To launch on startup:
+#### Windows launch on startup:
 - Right click on .exe and select 'Create shortcut'
 - Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 
@@ -121,16 +137,18 @@ $ sudo usermod -a -G dialout dominique
 $ sudo reboot
 ```
 
-To launch on startup using using Startup Applications Preferences:
+#### Linux launch on startup:
+Using Startup Applications Preferences:
 -  Add a new entry named Thoths Oracle.
 -  If you have installed the .desktop file, set the command to gtk-launch thoths_oracle.desktop
 -  Otherwise, change the command to the location you extracted Thoth's Oracle in.
     - eg. /home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
 - Add a comment if desired and save.
 
-### Windows
-- Right click on .exe and select 'Create shortcut'
-- Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+#### Phone connection to Linux:
+To use audio from phone with all the same features, install [KDE Connect](https://kdeconnect.kde.org/), or [GSConnect](https://github.com/GSConnect/gnome-shell-extension-gsconnect/wiki) and follow the instructions to set it up.
+Next, connect phone (source) to Linux (sink) through bluetooth for audio.
+Done!
 
 # License
 
