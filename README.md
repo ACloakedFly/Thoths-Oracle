@@ -1,7 +1,7 @@
 # Thoth's Oracle
 ## Table of Contents:
 - [Features](#Features)
-- [Make your own!](#Make-your-own!)
+- [Make your own](#Make-your-own)
 - [How it works](#How-it-works)
   - [Hardware](#Hardware)
   - [Software](#Software)
