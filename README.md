@@ -148,6 +148,7 @@ Using Startup Applications Preferences:
 
 #### Phone connection to Linux:
 To use audio from phone with all the same features, install [KDE Connect](https://kdeconnect.kde.org/), or [GSConnect](https://github.com/GSConnect/gnome-shell-extension-gsconnect/wiki) and follow the instructions to set it up.  
+Add kdeconnect or gsconnect to config.yaml in MonitoredProgram section.  
 Next, connect phone (source) to Linux (sink) through bluetooth for audio.  
 Done!  
 
