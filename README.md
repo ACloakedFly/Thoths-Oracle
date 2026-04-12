@@ -11,7 +11,7 @@
 - [Installation](#Installation)
   - [Windows](#Windows)
     - [Launch on startup](#Windows-launch-on-startup)
-  - [Linux](#Linux-(Tested-on-Ubuntu))
+  - [Linux](#Linux-Tested-on-Ubuntu)
     - [Example](#Example)
     - [Linux launch on startup](#Linux-launch-on-startup)
 - [License](#License)
