@@ -14,6 +14,7 @@
   - [Linux](#Linux-Tested-on-Ubuntu)
     - [Example](#Example)
     - [Linux launch on startup](#Linux-launch-on-startup)
+    - [Phone Connection](#Phone-connection-to-linux)
 - [License](#License)
 
 ### USB operated media display/controller for Windows, Linux(, MacOS WIP).
