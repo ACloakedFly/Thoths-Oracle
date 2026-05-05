@@ -89,12 +89,12 @@ esp_vfs_littlefs_conf_t conf = {
     .format_if_mount_failed = true,
     .dont_mount = false,
 };
+//esp_littlefs_t lfs;
 
 void little_fs(void)
 {
-    ESP_LOGI(TAG, "Initializing LittleFS");
-
-
+    ESP_LOGI(TAG, "Initializing LittleFS"); 
+    //esp_vfs_fat_register();
     // Use settings defined above to initialize and mount LittleFS filesystem.
     // Note: esp_vfs_littlefs_register is an all-in-one convenience function.
     esp_err_t ret = esp_vfs_littlefs_register(&conf);
@@ -129,16 +129,21 @@ void little_fs(void)
     ESP_LOGI(TAG, "GIF size %lu", gif_size);
     gif_counter = fread(&album_cover[0], sizeof album_cover[0], GIF_SIZE, gif_ptr);
     fclose(gif_ptr);
+    //esp_littlefs_get_fd_by_name()
+    //_efs
     // All done, unmount partition and disable LittleFS
     //esp_vfs_littlefs_unregister(conf.partition_label);
     //ESP_LOGI(TAG, "LittleFS unmounted");
 }
 
-
+void fatfs(void){
+    esp_vfs_register();
+}
 
 void lvgl_ui(lv_disp_t *disp)
 {
-    little_fs();
+    //little_fs();
+    fatfs();
     //LVGL display setup
     lv_obj_t *scr = lv_disp_get_scr_act(disp);
     lv_disp_set_bg_color(disp, lv_color_black());
@@ -200,8 +205,10 @@ void lvgl_ui(lv_disp_t *disp)
     lv_obj_align(img_cover, LV_ALIGN_CENTER, 600, 54);
 
     //GIF
-    gif = lv_img_create(scr);
-    lv_img_set_src(gif, &gif_rgb);
+    //gif = lv_img_create(scr);
+    gif = lv_gif_create(scr);
+    //lv_img_set_src(gif, &gif_rgb);
+    lv_gif_set_src(gif, "/littlefs/resized.gif");
     lv_obj_align(gif, LV_ALIGN_CENTER, 0, 54);
     //lv_img_set_zoom(gif, (float)((float)IMG_WIDTH/(float)GIF_WIDTH)*256);
 
@@ -256,10 +263,11 @@ void lvgl_ui(lv_disp_t *disp)
     lv_timer_set_repeat_count(song_time, -1);
     lv_timer_ready(song_time);
 
+    //Sorta working gif
     //gif_ptr = fopen("/littlefs/gif_bytes", "r");
-    gif_time = lv_timer_create(gif_timer, 200, NULL);
-    lv_timer_set_repeat_count(gif_time, -1);
-    lv_timer_ready(gif_time);
+    //gif_time = lv_timer_create(gif_timer, 200, NULL);
+    //lv_timer_set_repeat_count(gif_time, -1);
+    //lv_timer_ready(gif_time);
 
     
     //res = lv_fs_open(&f, "A:/littlefs/bulb.gif", LV_FS_MODE_RD);

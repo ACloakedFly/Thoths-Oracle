@@ -5,5 +5,6 @@
 cmake_minimum_required(VERSION 3.16)
 
 add_compile_options(-I${CMAKE_CURRENT_LIST_DIR}/managed_components/joltwallet__littlefs/src/littlefs)
-include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+#include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+include(/home/dominique/esp/v5.5.1/esp-idf/tools/cmake/project.cmake)
 project(Firmware)

@@ -26,6 +26,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include <stdlib.h>
 #include <stdint.h>
 #include <wchar.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -52,6 +53,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include <unistd.h>
 #include "esp_system.h"
 #include "esp_littlefs.h"
+#include "esp_vfs.h"
 
 #define UTF8 1
 #define UTF16 2
@@ -164,6 +166,9 @@ extern const uint8_t icon_artist[416];
 extern const lv_img_dsc_t icon_artist_rgb;
 
 //LCD
+#ifndef LV_CONF_INCLUDE_SIMPLE
+    #define LV_CONF_INCLUDE_SIMPLE
+#endif
 #define LCD_HOST  SPI2_HOST
 
 #define LVGL_TICK_PERIOD_MS    2//Smaller seems better

@@ -29,37 +29,48 @@ def convert_to_565(bytes):
         rgb565.extend(gb.to_bytes(1, 'little'))
     return rgb565
 
-with Image(filename="shocked.gif") as gif:
-    gif.iterator_reset()
-    frames_num = len(gif.sequence)
-    byte_file = open("gif_bytes", "wb")
-    frame_size = 180
-    print(gif.delay*10)
-    for i in range(0, frames_num):
-        frame = Image(gif.sequence[i])
-        frame.transform(resize=f'{frame_size}x{frame_size}!')
-        #frame.transform('80%x100')
-        frame.background_color = Color('black')
-        frame.extent(frame_size, frame_size, gravity='center')
-        frame.save(filename=f"gif/gif{i}.png")
-        pixels = frame.export_pixels(channel_map="RGB")
-        rgb565 = convert_to_565(pixels)
-        for i in range(0, len(rgb565), 2):
-            byte = bytearray()
-            byte.extend(rgb565[i].to_bytes(1, 'little'))
-            byte.extend(rgb565[i+1].to_bytes(1, 'little'))
-            byte_file.write(byte)
-    print(os.path.getsize(filename="gif_bytes"))
-    byte_file.close()
-    byte_size = os.path.getsize(filename="gif_bytes")
-    if(byte_size > 2457600):
-        print("File too big, max size is 2.4 MB")
-    #debug_layers(gif, "expanded.png")
-    
-    #gif.coalesce()
-    #gif.convert("gif").coalesce().to_bytes()
+def resize_gif():
+    with Image(filename="shocked.gif") as gif:
+        gif.iterator_reset()
+        frames_num = len(gif.sequence)
+        byte_file = open("gif_bytes", "wb")
+        frame_size = 180
+        print(gif.delay*10)
+        for i in range(0, frames_num):
+            with gif.sequence[i] as frame:
+                #frame = Image(gif.sequence[i])
+                frame.transform(resize=f'{frame_size}x{frame_size}') #remove '!' for cropping properly
+                #frame.transform('80%x100')
+                frame.background_color = Color('black')
+                frame.extent(frame_size, frame_size, gravity='center')
+                #frame.save(filename=f"gif/gif{i}.png")
+                pixels = frame.export_pixels(channel_map="RGB")
+                rgb565 = convert_to_565(pixels)
+                for i in range(0, len(rgb565), 2):
+                    byte = bytearray()
+                    byte.extend(rgb565[i].to_bytes(1, 'little'))
+                    byte.extend(rgb565[i+1].to_bytes(1, 'little'))
+                    byte_file.write(byte)
+        print(os.path.getsize(filename="gif_bytes"))
+        byte_file.close()
+        byte_size = os.path.getsize(filename="gif_bytes")
+        if(byte_size > 2457600):
+            print("File too big, max size is 2.4 MB")
+        #debug_layers(gif, "expanded.png")
+        
+        gif.coalesce()
 
-    #gif.transform(resize='304x304')
-    #gif.background_color = Color('black')
-    #gif.extent(304, 304, gravity='center')
-    #gif.save(filename='gify.gif')
+        #gif.transform(resize='304x304')
+        #gif.background_color = Color('black')
+        #gif.extent(304, 304, gravity='center')
+        gif.save(filename='resized.gif')
+
+def gif_resizer():
+    with Image(filename="shocked.gif") as gif:
+        gif.iterator_reset()
+        byte_file = open("gif_bytes", "wb")
+        frame_size = 180
+        print(gif.delay*10)
+
+
+resize_gif()
