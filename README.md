@@ -1,12 +1,30 @@
 # Thoth's Oracle
+## Table of Contents:
+- [Features](#Features)
+- [Make your own](#Make-your-own)
+- [How it works](#How-it-works)
+  - [Hardware](#Hardware)
+  - [Software](#Software)
+  - [Firmware](#Firmware)
+- [Configuration](#Configuration)
+- [FAQ](#FAQ)
+- [Installation](#Installation)
+  - [Windows](#Windows)
+    - [Launch on startup](#Windows-launch-on-startup)
+  - [Linux](#Linux-Tested-on-Ubuntu)
+    - [Example](#Example)
+    - [GNOME Specific](#GNOME-Specific)
+    - [Linux launch on startup](#Linux-launch-on-startup)
+    - [Phone Connection](#Phone-connection-to-linux)
+- [License](#License)
 
-USB operated media display/controller for Windows, Linux(, MacOS WIP).
+### USB operated media display/controller for Windows, Linux(, MacOS WIP).
 
 USB music display helps you keep track of what you are listening to without taking up precious screen space. Thoth's Oracle provides a one stop shop for checking on the current media information and basic controls such as skipping tracks, playing and pausing and adjusting the volume.
 ![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4854.JPG)
 ![Image](https://github.com/ACloakedFly/Thoths-Oracle/blob/main/Images/Product%20Pics/IMG_4855.JPG)
 
-# Features
+# Features:
 
 - Software agnostic companion app listens to operating system rather than a specific program like Spotify app or Firefox
   - If OS is aware of media, companion app will be as well
@@ -38,14 +56,14 @@ USB music display helps you keep track of what you are listening to without taki
 
 Everything you need to make your own should be in BOM-and-Assembly. Let me know if anything can be improved.
 
-# How it works
+# How it works:
 
-## Hardware
+## Hardware:
 
 - An ESP32-S3 zero controls all of the device inputs and displays information on screen
 - ESP32 communicates with PC over USB C OTG connection
 
-## Software
+## Software:
 
 - The software is written in C# for the Windows App.
 - Companion app catches changes to focused media broadcast from the operating system.
@@ -59,7 +77,7 @@ Everything you need to make your own should be in BOM-and-Assembly. Let me know 
 - Once ready signal is received, Thoth sends a package over serial port, waits for ready signal, then proceeds to next package.
 - When input commands are received, Thoth requests the OS completes the action.
 
-## Firmware
+## Firmware:
 
 - The firmware is written in C.
 - All serial communications are handled by Core 1. Core 0 handles all display features running LVGL.
@@ -72,7 +90,7 @@ Everything you need to make your own should be in BOM-and-Assembly. Let me know 
 - Once the expected number of bytes is received based on the header tag, the header is reset, Oracle emits a ready signal, then enters idle state.
 - If firmware times out before receiving expected data, header tag is reset and device enters idle state.
 
-# Configuration
+# Configuration:
 
  The following can be configured from companion app or config file
 - Which program to listen to
@@ -81,21 +99,21 @@ Everything you need to make your own should be in BOM-and-Assembly. Let me know 
 - Which output device to control (default, speakers, headphones, etc.)
 - Wallpaper mode
 
-# FAQ
+# FAQ:
 
 Someone ask me something, please.
 
-# Installation
+# Installation:
 
-### Windows
+### Windows:
 
 Companion app is provided as portable application that doesn't need installation. Just download and extract the software file for your system wherever you want and run it!
 
-To launch on startup:
+#### Windows launch on startup:
 - Right click on .exe and select 'Create shortcut'
 - Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 
-### Linux (Tested on Ubuntu)
+### Linux (Tested on Ubuntu):
 
 - Extract folder to desired location.
 - Edit .desktop file to match new location if you want app to appear in Apps list.
@@ -108,7 +126,7 @@ desktop-file-install thoths_oracle.desktop
 - Verify the device's group permissions are rw and note the group.
 - Verify you are part of the group.
 - Reboot
-#### Example
+#### Example:
 
 ```
 $ sudo dmesg | grep tty
@@ -120,18 +138,23 @@ crw-rw---- 1 root dialout 166, 0 Dec  2 18:21 /dev/ttyACM0
 $ sudo usermod -a -G dialout dominique
 $ sudo reboot
 ```
+#### GNOME Specific:
+GNOME may need an extension such as [AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/) to display the menu along the top panel. Otherwise, the program will run normally but all settings will have to be changed through the configuration file.
 
-To launch on startup using using Startup Applications Preferences:
+#### Linux launch on startup:
+Using Startup Applications Preferences:
 -  Add a new entry named Thoths Oracle.
 -  If you have installed the .desktop file, set the command to gtk-launch thoths_oracle.desktop
 -  Otherwise, change the command to the location you extracted Thoth's Oracle in.
     - eg. /home/dominique/Documents/Programs/Thoths_Oracle_linux/Thoths_Oracle
 - Add a comment if desired and save.
 
-### Windows
-- Right click on .exe and select 'Create shortcut'
-- Copy the shortcut to %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+#### Phone connection to Linux:
+To use audio from phone with all the same features, install [GSConnect](https://github.com/GSConnect/gnome-shell-extension-gsconnect/wiki) for GNOME, or [KDE Connect](https://kdeconnect.kde.org/) for KDE Plasma and follow the instructions to set it up.  
+Add kdeconnect or gsconnect to config.yaml in MonitoredProgram section.  
+Next, connect phone (source) to Linux (sink) through bluetooth for audio.  
+Done!  
 
-# License
+# License:
 
 Thoth's Oracle is licensed under GPL-3.0

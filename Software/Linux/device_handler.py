@@ -30,12 +30,17 @@ import time
 import datetime
 from wand.image import Image
 from wand.color import Color as wand_color
+from wand import exceptions as wand_exceptions
 from config_handler import config_watcher, load_config, logging, URI_FILE, WALLPAPER_FOLDER
 import config_handler
 import re
 import os
 from colour import Color
 
+MAX_QUEUE_WAIT = 5 #seconds
+WRITER = 0
+META = 1
+SETUP = 2
 global player
 global oracle_ready
 oracle_ready = True
@@ -82,6 +87,8 @@ global media_check_thread
 global media_handler
 global player_uri
 player_uri = ""
+global reconnect
+reconnect = True
 
 MAX_ATTEMPTS = 20
 #Message types
@@ -140,6 +147,23 @@ def serial_decode(code, cmd):
         except Exception as e:
             logging("serial_decode: " + str(e))
 
+def queue_putter(args, mode = WRITER):
+    try:
+        match mode:
+            case 0:
+                writer_queue.put(args, timeout=MAX_QUEUE_WAIT)
+                pass
+            case 1:
+                meta_queue.put(args, timeout=MAX_QUEUE_WAIT)
+                pass
+            case 2:
+                config_handler.setup_queue.put(args, timeout=MAX_QUEUE_WAIT)
+                pass
+    except queue.Full:
+        pass
+    except Exception as e:
+        logging("queue_putter: " + str(mode) + " | " + str(e))
+
 def serial_reader():
     message = ""
     code = -1
@@ -150,7 +174,7 @@ def serial_reader():
             next_byte = oracle_serial.read()
         except Exception as e:
             logging("serial_reader: " + str(e))
-            config_handler.setup_queue.put("serial_reader")
+            queue_putter("serial_reader", mode=SETUP)
             return -1
         next_int = int.from_bytes(next_byte)
         if next_int == 0:
@@ -204,10 +228,10 @@ def uri_selection(skip = False, sender_uri = ""):
                 media_handler.remove()
                 media_handler = bus.add_signal_receiver(handler_function=player_handler, bus_name=player_uri, dbus_interface='org.freedesktop.DBus.Properties')
             if skip:
-                config_handler.setup_queue.put("Session changed")
+                queue_putter("Session changed", mode=SETUP)
             return True
         except Exception as e:
-            logging("If AppArmor issue, please resolve, then restart app\n" + str(e), notify=True)
+            logging("If AppArmor issue, please resolve, then restart app\n" + str(e), notify=False)
             return False
     else:
         logging("No player monitored", notify=False)
@@ -239,7 +263,7 @@ def serial_setup():
         oracle_serial = None
         serial_reading = False
         oracle_ready = True
-        logging("ComPort not found, please select another.", notify=True)
+        logging("ComPort not found, please select another.", notify=False)
     except Exception as e:
         logging("serial_setup error: " + str(e))
 
@@ -260,7 +284,7 @@ def general_setup():
             if old_config != None:
                 if old_config['MonitoredProgram'] != oracle_config['MonitoredProgram']:
                     updated = uri_selection()
-                if old_config['ComPort'] != oracle_config['ComPort'] or str(setup_instance) == "serial_reader":
+                if old_config['ComPort'] != oracle_config['ComPort'] or str(setup_instance) == "serial_reader" or str(setup_instance) == "Refresh":
                     serial_setup()
                 if old_config['Colour'] != oracle_config['Colour']:
                     update_colour()
@@ -269,7 +293,8 @@ def general_setup():
                 serial_setup()
                 update_colour()
             old_config = oracle_config
-
+            if str(setup_instance) == "Reconnect":
+                serial_setup()
             wallpaper_mode = oracle_config['WallpaperMode']
             wallpaper_period = oracle_config['WallpaperPeriod']*60
             if wallpaper_mode:
@@ -281,7 +306,7 @@ def general_setup():
                 try:
                     values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
                     if meta_queue.qsize() < 38 and oracle_config['WallpaperMode'] is False:
-                        meta_queue.put((values, 0), block=False)
+                        queue_putter((values, 0), mode=META)
                     
                     logging("Starting media check timer")
                 except Exception as e:
@@ -311,14 +336,14 @@ def update_colour():
     ci = int(c.get_hex_l().removeprefix("#"), 16)
     cdi = int(cd.get_hex_l().removeprefix("#"), 16)
     logging("Progress bar colour: " + str(c.get_hex_l()) + " date/time line colour: " + str(cd.get_hex_l()))
-    writer_queue.put(dict(tag=COLOUR_TAG, length=cdi, data=None, width=0, height=0, dur=ci))
+    queue_putter(dict(tag=COLOUR_TAG, length=cdi, data=None, width=0, height=0, dur=ci))
 
 def update_date_time():
     #Date and time
     current_time = datetime.datetime.now()
     day_month = int(current_time.day + (current_time.month << 8))
     current_seconds = int((current_time-datetime.datetime(current_time.year, current_time.month, current_time.day)).total_seconds())
-    writer_queue.put(dict(tag=SYS_MSG_TAG, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
+    queue_putter(dict(tag=SYS_MSG_TAG, length=0, data=None, width=day_month, height=current_time.year, dur=current_seconds))
 
 def data_handler(*args):
     global duration
@@ -339,17 +364,18 @@ def data_handler(*args):
             playing = 0
             if "PlaybackStatus" in properties:
                 if properties['PlaybackStatus'] == "Playing":
-                    #logging("Playback status: " + properties['PlaybackStatus'])
                     playing = 1
-            writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+            queue_putter(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
             #Text data
             artists = ", ".join([str(ele) for ele in properties['Metadata']['xesam:albumArtist']]) if oracle_config['AlbumArtist'] else ", ".join([str(ele) for ele in properties['Metadata']['xesam:artist']])
             meta_text = properties['Metadata']['xesam:title'] + "\n" + artists + "\n" + properties['Metadata']['xesam:album'] + "\n"
             meta_bytes = bytearray(meta_text, encoding='utf8')
-            writer_queue.put(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
+            queue_putter(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
             #Image data
             if "mpris:artUrl" in properties['Metadata']:
                 thumb = properties['Metadata']['mpris:artUrl']
+                thumb = thumb.replace("%20",  " ")
+                #logging("Opening file: " + thumb)
                 with Image(filename=thumb) as img:
                     img.transform(resize='304x304')
                     img.background_color = wand_color('black')
@@ -357,9 +383,13 @@ def data_handler(*args):
                     img.save(filename='thumby.png')
                     pixels = img.export_pixels(channel_map="RGB")
                     rgb565 = convert_to_565(pixels)
-                    writer_queue.put(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
+                    queue_putter(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
         except KeyError:
             pass
+        except wand_exceptions.BlobError:
+            logging("Error with image file")
+        except Exception as e:
+            logging("data_handler: " + str(e))
     #Playback changed
     if "PlaybackStatus" in properties:
         logging("Playback status: " + properties['PlaybackStatus'])
@@ -369,7 +399,7 @@ def data_handler(*args):
         pos_dur = bytearray()
         pos_dur.extend(position.to_bytes(4, 'little'))
         pos_dur.extend(duration.to_bytes(4, 'little'))
-        writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=0))
+        queue_putter(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=0))
 
 def log_media(*media):
     if "Metadata" in media[0]:
@@ -384,7 +414,9 @@ def queue_handler():
     while meta_reading:
         try:
             properties = meta_queue.get(timeout=1)
-            if exitting:
+            #logging("meta_thread: " + str(properties))
+            if str(properties) == "Exit":
+                logging("Queue handler exitting")
                 return
             if meta_queue.qsize() >= 5:
                 meta_queue.task_done()
@@ -400,47 +432,64 @@ def queue_handler():
                 if type(properties[1]) is dbus.Dictionary:
                     #logging("Sending properties" + str(properties[1]))
                     data_handler(properties[1])
-                    log_media(properties[1])
+                    log_media(properties[1])    
                 else:
                     data_handler(properties[0])
                     log_media(properties[0])
-            
             else:
                 #logging("Not right " + str(len(properties)) + " \n" + str(properties))
                 pass
             meta_queue.task_done()
         except queue.Empty:
             pass
+        except Exception as e:
+            logging("queue_handler: " + str(e))
 
-
+#add another queue as buffer for media check rather than a super loop?
 def media_check():
     global queued_media
+    global reconnect
+    counter = 0
+    QUEUED_WAIT = 5 #seconds
+    UNQUEUED_WAIT = 1 #seconds
+    COUNT = 10 / UNQUEUED_WAIT
     while not exitting:
         try:
             if queued_media:
                 queued_media = False
                 if player is not None:
-                    time.sleep(2)
+                    time.sleep(QUEUED_WAIT)
                     values = dict(Metadata=player.Metadata, PlaybackStatus=player.PlaybackStatus)
-                    meta_queue.put((values, 0), block=False)
+                    queue_putter((values, 0), mode=META)
             else:
-                time.sleep(1)
+                time.sleep(UNQUEUED_WAIT)
+            counter += 1
+            counter %= COUNT
+            if player is not None and counter == COUNT-1 and oracle_serial == None:
+                reconnect = True
+                logging("Reconnecting")
+                queue_putter("Reconnect", mode= SETUP)
         except queue.Full:
             pass
         except dbus.exceptions.DBusException:
             pass
+        except Exception as e:
+            logging("media_check: " + str(e))
 
 def player_handler(*args, **kw):
     global queued_media
+    global reconnect
     try:
         if meta_queue.qsize() < 5 and oracle_config['WallpaperMode'] is False:
             #logging("Player handler: " + str(args))
-            meta_queue.put(args, block=False)
+            reconnect = True
+            queue_putter(args, mode=META)
         else:
             queued_media = True
             #logging("Queue full")
     except Exception as e: 
         queued_media = True
+        logging(str(e))
         #logging("player_handler:" + str(e))
 
 def wallpaper_handler():
@@ -453,7 +502,7 @@ def wallpaper_handler():
 def pause_wallpaper():
     pos_dur = bytearray(8)
     playing = 0
-    writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+    queue_putter(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
 
 def next_wallpaper(direction=1):
     global wallpaper_index
@@ -464,14 +513,14 @@ def next_wallpaper(direction=1):
     logging("Loading next image: " + thumb)
     meta_text = oracle_config['WallpaperTitle'] + "\n" + oracle_config['WallpaperAlbum'] + "\n" + oracle_config['WallpaperArtist'] + "\n"
     meta_bytes = bytearray(meta_text, encoding='utf8')
-    writer_queue.put(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
+    queue_putter(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
 
     #Position and duration
     pos_dur = bytearray(4)
     duration = oracle_config['WallpaperPeriod']*60
     pos_dur.extend(duration.to_bytes(4, 'little'))
     playing = 1
-    writer_queue.put(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+    queue_putter(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
 
     with Image(filename=thumb) as img:
         img.transform(resize='304x304')
@@ -480,30 +529,34 @@ def next_wallpaper(direction=1):
         img.save(filename='thumby.png')
         pixels = img.export_pixels(channel_map="RGB")
         rgb565 = convert_to_565(pixels)
-        writer_queue.put(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
+        queue_putter(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
     
     if wallpaper_mode:
         wallpaper_timer = threading.Timer(interval=wallpaper_period, function=next_wallpaper)
         wallpaper_timer.start()
 
 def serial_write_bytes():
+    global reconnect
     while serial_writing:
         try:
             kwargs = writer_queue.get(timeout=1)
-            if exitting:
+            if str(kwargs) == "Exit":
+                writer_queue.task_done()
                 return
             attemps = 0
             maxed_attemps = False
             global oracle_ready
-            while not oracle_ready and not maxed_attemps:
+            while not oracle_ready and not maxed_attemps and not exitting:
                 if attemps >= MAX_ATTEMPTS:
                     logging("Tried to send " + CODES[kwargs['tag']-1] + " oracle timed out " + str(oracle_ready))
+                    if reconnect:
+                        queue_putter("Reconnect", mode=SETUP)
+                        reconnect = False
                     maxed_attemps = True
                 attemps+=1
                 time.sleep(0.2)
             if maxed_attemps:
                 writer_queue.task_done()
-                #config_handler.setup_queue.put("serial_writer")
                 continue
             oracle_ready = False
             dur = 0 if "dur" not in kwargs else kwargs['dur']
@@ -520,6 +573,10 @@ def serial_write_bytes():
             writer_queue.task_done()
         except queue.Empty:
             pass
+        except serial.SerialException:
+            reconnect = True
+        except Exception as e:
+            logging("serial_writer: " + str(e))
 
 
 def session_changed(*args, **kwargs):
@@ -541,8 +598,8 @@ def status_changed(*args, **kwargs):
     media_handler.remove()
     logging("Activating uri " + player_uri)
     media_handler = bus.add_signal_receiver(handler_function=player_handler, bus_name=player_uri, dbus_interface='org.freedesktop.DBus.Properties', sender_keyword="sender", destination_keyword="destination", interface_keyword="interface", member_keyword="member", path_keyword="path", message_keyword="msg")
-    logging("Status changed " + str(args) + "\n " + str(kwargs))
-    config_handler.setup_queue.put("Status changed")
+    #logging("Status changed " + str(args) + "\n " + str(kwargs))
+    queue_putter("Status changed", mode=SETUP)
 
 def seeked(*args, **kwargs):
     global queued_media
@@ -586,7 +643,7 @@ def main_setup():
     setup_thread = threading.Thread(target=general_setup)
     setup_thread.start()
 
-    config_handler.setup_queue.put("Main", block=False)
+    queue_putter("Main", mode=SETUP)
     meta_thread = threading.Thread(target=queue_handler, name="MetadataThread")
     meta_thread.start()
 
@@ -609,11 +666,12 @@ def main_exit():
     global exitting
 
     exitting = True
-    meta_reading = False
-    serial_writing = False
+    #meta_reading = False
+    #serial_writing = False
     serial_reading = False
     setting_up = False
-
+    logging("Exitting")
+    print("main_exit")
     writer_queue.put("Exit")
     logging("Put writer exit")
     meta_queue.put("Exit")
@@ -624,13 +682,19 @@ def main_exit():
     #writer_queue.join()
     #config_handler.setup_queue.join()
     logging("Joined queues")
-    media_check_thread.join()
+    if media_check_thread.is_alive():
+        media_check_thread.join()
     logging("Joined media_check")
-    read_thread.join()
+    if read_thread.is_alive():
+        read_thread.join()
     logging("Joined read")
-    setup_thread.join()
+    if setup_thread.is_alive():
+        setup_thread.join()
     logging("Joined setup")
-    meta_thread.join()
+    if meta_thread.is_alive():
+        logging("Joining meta")
+        meta_thread.join()
     logging("Joined meta")
-    writer_thread.join()
+    if writer_thread.is_alive():
+        writer_thread.join()
     logging("Joined write")
