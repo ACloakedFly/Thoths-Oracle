@@ -505,35 +505,38 @@ def pause_wallpaper():
     queue_putter(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
 
 def next_wallpaper(direction=1):
-    global wallpaper_index
-    global wallpaper_timer
-    wallpaper_index += direction
-    wallpaper_index %= wallpaper_num
-    thumb = images[wallpaper_index]
-    logging("Loading next image: " + thumb)
-    meta_text = oracle_config['WallpaperTitle'] + "\n" + oracle_config['WallpaperAlbum'] + "\n" + oracle_config['WallpaperArtist'] + "\n"
-    meta_bytes = bytearray(meta_text, encoding='utf8')
-    queue_putter(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
+    try:
+        global wallpaper_index
+        global wallpaper_timer
+        wallpaper_index += direction
+        wallpaper_index %= wallpaper_num
+        thumb = images[wallpaper_index]
+        logging("Loading next image: " + thumb)
+        meta_text = str(oracle_config['WallpaperTitle']) + "\n" + str(oracle_config['WallpaperAlbum']) + "\n" + str(oracle_config['WallpaperArtist']) + "\n"
+        meta_bytes = bytearray(meta_text, encoding='utf8')
+        queue_putter(dict(tag=TEXT_TAG, length=len(meta_bytes), data=meta_bytes, width=0, height=0))
 
-    #Position and duration
-    pos_dur = bytearray(4)
-    duration = oracle_config['WallpaperPeriod']*60
-    pos_dur.extend(duration.to_bytes(4, 'little'))
-    playing = 1
-    queue_putter(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
+        #Position and duration
+        pos_dur = bytearray(4)
+        duration = oracle_config['WallpaperPeriod']*60
+        pos_dur.extend(duration.to_bytes(4, 'little'))
+        playing = 1
+        queue_putter(dict(tag=DUR_POS_TAG, length=len(pos_dur), data=pos_dur, width=playing, height=1))
 
-    with Image(filename=thumb) as img:
-        img.transform(resize='304x304')
-        img.background_color = wand_color('black')
-        img.extent(304, 304, gravity='center')
-        img.save(filename='thumby.png')
-        pixels = img.export_pixels(channel_map="RGB")
-        rgb565 = convert_to_565(pixels)
-        queue_putter(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
-    
-    if wallpaper_mode:
-        wallpaper_timer = threading.Timer(interval=wallpaper_period, function=next_wallpaper)
-        wallpaper_timer.start()
+        with Image(filename=thumb) as img:
+            img.transform(resize='304x304')
+            img.background_color = wand_color('black')
+            img.extent(304, 304, gravity='center')
+            img.save(filename='thumby.png')
+            pixels = img.export_pixels(channel_map="RGB")
+            rgb565 = convert_to_565(pixels)
+            queue_putter(dict(tag=IMG_TAG, length=len(rgb565), data=rgb565, width=img.width, height=img.height))
+        
+        if wallpaper_mode:
+            wallpaper_timer = threading.Timer(interval=wallpaper_period, function=next_wallpaper)
+            wallpaper_timer.start()
+    except Exception as e:
+        logging("next_wallpaper:" + str(e))
 
 def serial_write_bytes():
     global reconnect
