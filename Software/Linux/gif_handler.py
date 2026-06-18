@@ -33,7 +33,7 @@ with Image(filename="shocked.gif") as gif:
     gif.iterator_reset()
     frames_num = len(gif.sequence)
     byte_file = open("gif_bytes", "wb")
-    frame_size = 280
+    frame_size = 170
     print(gif.delay*10)
     for i in range(0, frames_num):
         frame = Image(gif.sequence[i])

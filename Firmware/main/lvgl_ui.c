@@ -23,6 +23,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include "data.h"
 #include <time.h>
 
+const char TAG[] = {"lvgl"};
 //Thumbnail image header
 const lv_img_dsc_t img_cover_rgb = {
   .header.always_zero = 0,
@@ -141,7 +142,7 @@ void little_fs(void)
 
 void lvgl_ui(lv_disp_t *disp)
 {
-    little_fs();
+    //little_fs();
     //LVGL display setup
     lv_obj_t *scr = lv_disp_get_scr_act(disp);
     lv_disp_set_bg_color(disp, lv_color_black());
@@ -205,7 +206,7 @@ void lvgl_ui(lv_disp_t *disp)
     //GIF
     gif = lv_img_create(scr);
     lv_img_set_src(gif, &gif_rgb);
-    lv_obj_align(gif, LV_ALIGN_CENTER, 0, 54);
+    lv_obj_align(gif, LV_ALIGN_CENTER, 0, 20);
     //lv_img_set_zoom(gif, (float)((float)280/(float)GIF_WIDTH)*256);
 
     //Song duration
@@ -260,9 +261,9 @@ void lvgl_ui(lv_disp_t *disp)
     lv_timer_ready(song_time);
 
     //gif_ptr = fopen("/littlefs/gif_bytes", "r");
-    gif_time = lv_timer_create(gif_timer, 1000/11, NULL);
-    lv_timer_set_repeat_count(gif_time, -1);
-    lv_timer_ready(gif_time);
+    //gif_time = lv_timer_create(gif_timer, 1000/11, NULL);
+    //lv_timer_set_repeat_count(gif_time, -1);
+    //lv_timer_ready(gif_time);
 
     
     //res = lv_fs_open(&f, "A:/littlefs/bulb.gif", LV_FS_MODE_RD);
@@ -350,6 +351,7 @@ static void gif_timer(lv_timer_t * timer){
         fseek(gif_ptr, gif_counter, SEEK_SET);
         gif_counter += fread(&album_cover[0], sizeof(album_cover[0]), GIF_SIZE, gif_ptr);
         //printf("%lf\n", (double)((end-start)/(double)CLOCKS_PER_SEC));
+        printf("%ld\n", gif_counter);
         if(gif_counter >= gif_size - (GIF_SIZE-200)){
             gif_counter = 0;
             rewind(gif_ptr);

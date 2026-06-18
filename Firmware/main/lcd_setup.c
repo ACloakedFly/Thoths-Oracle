@@ -21,6 +21,10 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 // lcd_setup.c
 
 #include "data.h"
+
+#if CONFIG_LILYGO_T_DISPLAY_S3 == 0
+
+const char TAG[] = {"lcd_setup"};
 static lv_disp_draw_buf_t disp_buf; // contains internal graphic buffer(s) called draw buffer(s)
 static lv_disp_drv_t disp_drv;      // contains callback functions
 lv_color_t *buf1;
@@ -153,3 +157,5 @@ void ui_setup(void *pvParameters){
     
     lvgl_ui(disp);
 }
+
+#endif

@@ -20,6 +20,7 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 */
 // data.h
 
+#pragma once
 #include <string.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -52,6 +53,10 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #include <unistd.h>
 #include "esp_system.h"
 #include "esp_littlefs.h"
+#include <sdkconfig.h>
+#include "esp_dma_utils.h"
+#include "driver/i2c_master.h"
+#include "soc/clk_tree_defs.h"
 
 #define UTF8 1
 #define UTF16 2
@@ -106,8 +111,8 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #define IMG_SIZE IMG_HEIGHT*IMG_WIDTH*2//Images are in RGB565 format so every pixel needs 2 bytes
 
 //GIF
-#define GIF_WIDTH 180//172
-#define GIF_HEIGHT 180//172
+#define GIF_WIDTH 170//172
+#define GIF_HEIGHT 170//172
 #define GIF_SIZE GIF_WIDTH*GIF_HEIGHT*2 
 
 //Text, added multiple opions to allow for faster testing, can ignore this section
@@ -127,7 +132,6 @@ along with Thoth's Oracle; if not, see <https://www.gnu.org/licenses/>
 #endif
 
 #define DUR_POS_BYTES 8
-extern const char TAG[3];
 extern char name[TEXT_SIZE];
 extern bool updated;
 extern uint8_t album_cover[IMG_SIZE + RX_BUF_SIZE];//Added an extra buffer at the end just incase
@@ -169,23 +173,70 @@ extern const lv_img_dsc_t icon_artist_rgb;
 #define LVGL_TICK_PERIOD_MS    2//Smaller seems better
 #define LVGL_HANDLER_PERIOD_MS    20//This effectively determines the framerate LVGL refreshes at, provided the CPU can keep up
 
-#define LCD_PIXEL_CLOCK_HZ     (1000/LVGL_HANDLER_PERIOD_MS)*480*320//This is how fast the SPI connection will communicate. Seems to work best when it is the same as the framerate
+
+#define CONFIG_LILYGO_T_DISPLAY_S3 1
+
+#if CONFIG_LILYGO_T_DISPLAY_S3
+    
+    #define EXAMPLE_LVGL_TICK_PERIOD_MS 2
+    #define BOARD_POWERON        (gpio_num_t)(15)
+
+    #define BOARD_TFT_BL         (38)
+    #define BOARD_TFT_DATA0      (39)
+    #define BOARD_TFT_DATA1      (40)
+    #define BOARD_TFT_DATA2      (41)
+    #define BOARD_TFT_DATA3      (42)
+    #define BOARD_TFT_DATA4      (45)
+    #define BOARD_TFT_DATA5      (46)
+    #define BOARD_TFT_DATA6      (47)
+    #define BOARD_TFT_DATA7      (48)
+    #define BOARD_TFT_RST        (5)
+    #define BOARD_TFT_CS         (6)
+    #define BOARD_TFT_DC         (7)
+    #define BOARD_TFT_WR         (8)
+    #define BOARD_TFT_RD         (9)
+    #define BOARD_I2C_SCL        (17)
+    #define BOARD_I2C_SDA        (18)
+    #define BOARD_TOUCH_IRQ      (16)
+    #define BOARD_TOUCH_RST      (21)
+    #define AMOLED_WIDTH         (170)
+    #define AMOLED_HEIGHT        (320)
+
+    #define BOARD_HAS_TOUCH      0
+
+    #define DISPLAY_BUFFER_SIZE  (AMOLED_WIDTH * 100)
+
+    #define DISPLAY_FULLRESH     false
+
+    extern void display_init(void *v);
+    extern esp_err_t i2c_driver_init(void);
+    extern bool power_driver_init();
+#else
+
+    #define LCD_PIXEL_CLOCK_HZ     (1000/LVGL_HANDLER_PERIOD_MS)*480*320//This is how fast the SPI connection will communicate. Seems to work best when it is the same as the framerate
 
 
-// The pixel number in horizontal and vertical
-#define LCD_H_RES              320
-#define LCD_V_RES              480
-#define LCD_BUF 42//Bigger is better, but it seems the ESP32S3 doesn't have enough DMA memory for more than 42
+    // The pixel number in horizontal and vertical
+    #define LCD_H_RES              320
+    #define LCD_V_RES              170//480
+    #define LCD_BUF 42//Bigger is better, but it seems the ESP32S3 doesn't have enough DMA memory for more than 42
 
-// Bit number used to represent command and parameter bits for SPI connection
-#define LCD_CMD_BITS           8
-#define LCD_PARAM_BITS         8
+    // Bit number used to represent command and parameter bits for SPI connection
+    #define LCD_CMD_BITS           8
+    #define LCD_PARAM_BITS         8
+    extern void ui_setup(void *pvParameters);
+#endif
+
+typedef struct {
+    uint32_t addr;
+    uint8_t param[20];
+    uint32_t len;
+} lcd_cmd_t;
 
 //Functions
 extern void lvgl_ui(lv_disp_t *disp);
 extern void inputs_main();
 extern void serial_task(void *pvParameters);
-extern void ui_setup(void *pvParameters);
 extern void UpdateInfo(void*v);
 extern void timer_incer(void *pvParameters);
 extern void serial_jtag_write(uint8_t msg_type, char *msg, uint16_t length, TickType_t ticks);
