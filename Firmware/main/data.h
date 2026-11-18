@@ -173,8 +173,8 @@ extern const lv_img_dsc_t icon_artist_rgb;
 #define LVGL_TICK_PERIOD_MS    2//Smaller seems better
 #define LVGL_HANDLER_PERIOD_MS    20//This effectively determines the framerate LVGL refreshes at, provided the CPU can keep up
 
-
-#define CONFIG_LILYGO_T_DISPLAY_S3 1
+#define LCD_RGB 1
+#define CONFIG_LILYGO_T_DISPLAY_S3 0
 
 #if CONFIG_LILYGO_T_DISPLAY_S3
     

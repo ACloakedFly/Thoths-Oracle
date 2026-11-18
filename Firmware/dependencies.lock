@@ -23,6 +23,52 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 0.5.3
+  espressif/esp_io_expander:
+    component_hash: 7b7f91270172e46ca4597e3874f48d8412e280e8c295559f5922ec38656e3e5f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4.2'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.2.1
+  espressif/esp_lcd_panel_io_additions:
+    component_hash: 1856c8b2c11aaa8a9fd67481582162bcad25f7064661a995f35c2ee8dd10ebcc
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: espressif/esp_io_expander
+      registry_url: https://components.espressif.com
+      require: public
+      version: ^1
+    - name: idf
+      require: private
+      version: '>=4.4.2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.1~1
+  espressif/esp_lcd_st7701:
+    component_hash: 5ccac8c0bcc58273df2c149aa40e607ebaac70bb53f5bc40c4d07e2e3f667fee
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: idf
+      require: private
+      version: '>=5.4'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s3
+    - esp32s31
+    - esp32p4
+    version: 2.0.3
   espressif/esp_lcd_st7796:
     component_hash: 8aa43d42736bf2fd7dc3dd945d3b35a5eebe10a9cd171b0c287edbd20f6562d8
     dependencies:
@@ -46,7 +92,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.3.5
+    version: 5.5.4
   joltwallet/littlefs:
     component_hash: 8e12955f47e27e6070b76715a96d6c75fc2b44f069e8c33679332d9bdd3120c4
     dependencies:
@@ -66,10 +112,12 @@ dependencies:
     version: 8.4.0
 direct_dependencies:
 - espressif/button
+- espressif/esp_lcd_panel_io_additions
+- espressif/esp_lcd_st7701
 - espressif/esp_lcd_st7796
 - idf
 - joltwallet/littlefs
 - lvgl/lvgl
-manifest_hash: 0f166f0b0f1346cc7cc0e699c1d714ee3a47f9011cc344448fc7439800c57360
+manifest_hash: f9b9f45752e3a67c83302a7d1d1b1315e9966d451246449650531567b5ab795a
 target: esp32s3
 version: 2.0.0
